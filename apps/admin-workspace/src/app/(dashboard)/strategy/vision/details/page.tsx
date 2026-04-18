@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 
 // Cấu trúc chuẩn của một Bản Chiến Lược (Canvas)
 interface StrategyCanvas {
@@ -19,7 +19,8 @@ interface StrategyCanvas {
 
 const defaultCanvas: StrategyCanvas = { context: '', pillars: '', metrics: '', risks: '' };
 
-export default function StrategyDetailsPage() {
+// TÁCH PHẦN CONTENT RA COMPONENT CON ĐỂ BỌC SUSPENSE
+function StrategyDetailsContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') || 'long';
 
@@ -199,5 +200,14 @@ export default function StrategyDetailsPage() {
 
       </div>
     </div>
+  );
+}
+
+// BỌC TRANG TRONG SUSPENSE ĐỂ NEXTJS KHÔNG BÁO LỖI KHI DÙNG useSearchParams
+export default function StrategyDetailsPage() {
+  return (
+    <Suspense fallback={<div className="p-20 text-center text-sm text-slate-500">Đang tải trang...</div>}>
+      <StrategyDetailsContent />
+    </Suspense>
   );
 }
