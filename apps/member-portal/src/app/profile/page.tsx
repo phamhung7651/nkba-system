@@ -96,7 +96,7 @@ export default function MemberProfilePage() {
             experiences: [{ company: '', role: '', period: '', description: '' }],
             education: [{ school: '', degree: '', year: '' }],
             certificates: [{ name: '', organization: '', year: '' }],
-            languages: [{ language: '', proficiency: 'Giao tiếp' }]
+            languages: [{ language: '', proficiency: '' }]
           }));
         }
       }
@@ -144,7 +144,7 @@ export default function MemberProfilePage() {
   };
 
   // HÀM XỬ LÝ MẢNG ĐỘNG (NGOẠI NGỮ)
-  const addLanguage = () => setForm({ ...form, languages: [...form.languages, { language: '', proficiency: 'Giao tiếp' }] });
+  const addLanguage = () => setForm({ ...form, languages: [...form.languages, { language: '', proficiency: '' }] });
   const removeLanguage = (index: number) => {
     const newLang = [...form.languages];
     newLang.splice(index, 1);
