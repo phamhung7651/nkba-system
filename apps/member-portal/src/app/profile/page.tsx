@@ -1,0 +1,462 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { createClient } from '@/utils/supabase/client';
+
+export default function MemberProfilePage() {
+  const supabase = createClient();
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [myTalentProfile, setMyTalentProfile] = useState<any>(null);
+  
+  const [isSaving, setIsSaving] = useState(false);
+  const [isOptIn, setIsOptIn] = useState(false);
+
+  // MỞ RỘNG STATE ĐỂ CHỨA DỮ LIỆU "KHỦNG"
+  const [form, setForm] = useState({
+    full_name: '', title: '', phone: '', email: '', 
+    skills: '', experience_years: 0, expected_salary: '', bio: '',
+    linkedin_url: '',
+    experiences: [] as { company: '', role: '', period: '', description: '' }[],
+    education: [] as { school: '', degree: '', year: '' }[],
+    certificates: [] as { name: '', organization: '', year: '' }[], // MỚI: Chứng chỉ
+    languages: [] as { language: '', proficiency: '' }[] // MỚI: Ngoại ngữ
+  });
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) return;
+
+      const individualId = user.user_metadata?.individual_id;
+
+      if (individualId) {
+        const { data: profile } = await supabase
+          .from('individuals')
+          .select(`id, full_name, email, phone, tax_code, corporates(name, tax_code), individual_tiers(name, code)`)
+          .eq('id', individualId)
+          .single();
+
+        if (profile) {
+          setCurrentUser({ ...profile, is_admin: false });
+
+          // Lấy CV hiện tại
+          const { data: talent } = await supabase.from('talents').select('*').eq('individual_id', individualId).single();
+          
+          if (talent) {
+            setMyTalentProfile(talent);
+            setIsOptIn(true);
+            setForm({
+              full_name: talent.full_name || '', title: talent.title || '', phone: talent.phone || '', email: talent.email || '',
+              skills: talent.skills || '', experience_years: talent.experience_years || 0, 
+              expected_salary: talent.expected_salary || '', bio: talent.bio || '',
+              linkedin_url: talent.linkedin_url || '',
+              experiences: talent.experiences || [],
+              education: talent.education || [],
+              certificates: talent.certificates || [],
+              languages: talent.languages || []
+            });
+          } else {
+            setForm(prev => ({ 
+              ...prev, 
+              full_name: profile.full_name || '', email: profile.email || '', phone: profile.phone || '',
+              experiences: [{ company: '', role: '', period: '', description: '' }],
+              education: [{ school: '', degree: '', year: '' }],
+              certificates: [{ name: '', organization: '', year: '' }],
+              languages: [{ language: '', proficiency: 'Giao tiếp' }]
+            }));
+          }
+        }
+      } else {
+        const { data: empData } = await supabase.from('employees').select('name, email').eq('email', user.email).single();
+        setCurrentUser({
+          id: user.id, 
+          full_name: empData?.name || 'Quản Trị Viên', email: user.email,
+          corporates: { name: 'Ban Điều Hành NKBA', tax_code: 'N/A' },
+          individual_tiers: { name: 'Super Admin' }, is_admin: true
+        });
+
+        const { data: talent } = await supabase.from('talents').select('*').eq('individual_id', user.id).single();
+        if (talent) {
+          setMyTalentProfile(talent);
+          setIsOptIn(true);
+          setForm({
+            full_name: talent.full_name || '', title: talent.title || '', phone: talent.phone || '', email: talent.email || '',
+            skills: talent.skills || '', experience_years: talent.experience_years || 0, 
+            expected_salary: talent.expected_salary || '', bio: talent.bio || '',
+            linkedin_url: talent.linkedin_url || '',
+            experiences: talent.experiences || [],
+            education: talent.education || [],
+            certificates: talent.certificates || [],
+            languages: talent.languages || []
+          });
+        } else {
+          setForm(prev => ({ 
+            ...prev, 
+            full_name: empData?.name || '', email: user.email || '',
+            experiences: [{ company: '', role: '', period: '', description: '' }],
+            education: [{ school: '', degree: '', year: '' }],
+            certificates: [{ name: '', organization: '', year: '' }],
+            languages: [{ language: '', proficiency: 'Giao tiếp' }]
+          }));
+        }
+      }
+    };
+    fetchData();
+  }, [supabase]);
+
+  // HÀM XỬ LÝ MẢNG ĐỘNG (KINH NGHIỆM)
+  const addExperience = () => setForm({ ...form, experiences: [...form.experiences, { company: '', role: '', period: '', description: '' }] });
+  const removeExperience = (index: number) => {
+    const newExp = [...form.experiences];
+    newExp.splice(index, 1);
+    setForm({ ...form, experiences: newExp });
+  };
+  const updateExperience = (index: number, field: string, value: string) => {
+    const newExp = [...form.experiences];
+    (newExp[index] as any)[field] = value;
+    setForm({ ...form, experiences: newExp });
+  };
+
+  // HÀM XỬ LÝ MẢNG ĐỘNG (HỌC VẤN)
+  const addEducation = () => setForm({ ...form, education: [...form.education, { school: '', degree: '', year: '' }] });
+  const removeEducation = (index: number) => {
+    const newEdu = [...form.education];
+    newEdu.splice(index, 1);
+    setForm({ ...form, education: newEdu });
+  };
+  const updateEducation = (index: number, field: string, value: string) => {
+    const newEdu = [...form.education];
+    (newEdu[index] as any)[field] = value;
+    setForm({ ...form, education: newEdu });
+  };
+
+  // HÀM XỬ LÝ MẢNG ĐỘNG (CHỨNG CHỈ)
+  const addCertificate = () => setForm({ ...form, certificates: [...form.certificates, { name: '', organization: '', year: '' }] });
+  const removeCertificate = (index: number) => {
+    const newCert = [...form.certificates];
+    newCert.splice(index, 1);
+    setForm({ ...form, certificates: newCert });
+  };
+  const updateCertificate = (index: number, field: string, value: string) => {
+    const newCert = [...form.certificates];
+    (newCert[index] as any)[field] = value;
+    setForm({ ...form, certificates: newCert });
+  };
+
+  // HÀM XỬ LÝ MẢNG ĐỘNG (NGOẠI NGỮ)
+  const addLanguage = () => setForm({ ...form, languages: [...form.languages, { language: '', proficiency: 'Giao tiếp' }] });
+  const removeLanguage = (index: number) => {
+    const newLang = [...form.languages];
+    newLang.splice(index, 1);
+    setForm({ ...form, languages: newLang });
+  };
+  const updateLanguage = (index: number, field: string, value: string) => {
+    const newLang = [...form.languages];
+    (newLang[index] as any)[field] = value;
+    setForm({ ...form, languages: newLang });
+  };
+
+  const handleSaveProfile = async () => {
+    if (!form.full_name || !form.title) return alert('Tên và Chức danh là bắt buộc!');
+    
+    setIsSaving(true);
+
+    const payload = {
+      individual_id: currentUser.id,
+      full_name: form.full_name, title: form.title, phone: form.phone, email: form.email,
+      skills: form.skills, experience_years: form.experience_years, expected_salary: form.expected_salary, bio: form.bio,
+      linkedin_url: form.linkedin_url,
+      experiences: form.experiences, 
+      education: form.education,
+      certificates: form.certificates, // Lưu chứng chỉ
+      languages: form.languages, // Lưu ngoại ngữ
+      status: 'PENDING' 
+    };
+
+    if (myTalentProfile) {
+      const { error } = await supabase.from('talents').update(payload).eq('id', myTalentProfile.id);
+      if (error) alert('Lỗi cập nhật: ' + error.message);
+      else alert('✅ Cập nhật hồ sơ thành công! Đang chờ Admin duyệt lại.');
+    } else {
+      const { error, data } = await supabase.from('talents').insert([payload]).select().single();
+      if (error) alert('Lỗi tạo hồ sơ: ' + error.message);
+      else {
+        alert('✅ Đã đẩy hồ sơ lên Talent-Hub! Vui lòng chờ Admin duyệt.');
+        setMyTalentProfile(data);
+      }
+    }
+    
+    setIsSaving(false);
+  };
+
+  if (!currentUser) return (
+    <div className="flex h-[80vh] items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <i className="ph-bold ph-spinner animate-spin text-4xl text-[#002D62]"></i>
+        <p className="text-slate-400 font-bold tracking-widest uppercase text-sm">Đang tải hồ sơ...</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-8 animate-in fade-in p-6 md:p-10 max-w-7xl mx-auto pb-24">
+      <div className="border-b border-slate-200 pb-6 flex flex-col md:flex-row justify-between md:items-end gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Hồ sơ Của Tôi</h1>
+          <p className="text-sm font-medium text-slate-500 mt-2">Quản lý định danh cá nhân và xây dựng thương hiệu chuyên gia trong hệ sinh thái.</p>
+        </div>
+        
+        {/* Nút Opt-in to bự trên cùng */}
+        <label className="flex items-center gap-4 bg-white p-3 pr-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+          <div className="relative">
+            <input type="checkbox" className="sr-only" checked={isOptIn} onChange={() => setIsOptIn(!isOptIn)} />
+            <div className={`block w-14 h-8 rounded-full transition-colors ${isOptIn ? 'bg-indigo-600' : 'bg-slate-300'}`}></div>
+            <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform shadow-md ${isOptIn ? 'transform translate-x-6' : ''}`}></div>
+          </div>
+          <div>
+            <div className={`text-sm font-black uppercase tracking-widest ${isOptIn ? 'text-indigo-600' : 'text-slate-500'}`}>
+              {isOptIn ? 'ĐANG BẬT TÌM KIẾM CƠ HỘI' : 'CHẾ ĐỘ ẨN DANH'}
+            </div>
+            <div className="text-[10px] font-bold text-slate-400">Trạng thái Talent Hub</div>
+          </div>
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        
+        {/* CỘT TRÁI: THẺ TÓM TẮT DÍNH (STICKY) */}
+        <div className="lg:col-span-1 space-y-6 relative">
+          <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm sticky top-28 overflow-hidden">
+            {currentUser.is_admin && <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 rounded-full blur-2xl"></div>}
+            
+            <div className="flex flex-col items-center text-center pb-6 border-b border-slate-100 relative z-10">
+              <div className="relative mb-4 group cursor-pointer">
+                <div className={`w-24 h-24 rounded-full flex items-center justify-center text-3xl font-black shadow-xl border-4 border-white text-white ${currentUser.is_admin ? 'bg-rose-600' : 'bg-[#002D62]'}`}>
+                  {currentUser.full_name?.charAt(0) || 'N'}
+                </div>
+                {/* Nút giả thay avatar */}
+                <div className="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full flex items-center justify-center text-slate-600 shadow-md border border-slate-100 group-hover:text-blue-600 group-hover:scale-110 transition-transform">
+                  <i className="ph-fill ph-camera text-sm"></i>
+                </div>
+              </div>
+              <h3 className="text-xl font-black text-slate-900">{currentUser.full_name}</h3>
+              <p className="text-sm font-bold text-slate-500 mt-1">{form.title || 'Chưa cập nhật chức danh'}</p>
+              
+              <div className={`mt-3 text-[10px] font-black uppercase px-3 py-1.5 rounded-full tracking-widest border ${currentUser.is_admin ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
+                {currentUser.individual_tiers?.name}
+              </div>
+            </div>
+            
+            <div className="pt-6 space-y-4 relative z-10">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1"><i className="ph-fill ph-buildings"></i> Tổ chức / Pháp nhân</p>
+                <p className="text-sm font-black text-slate-800">{currentUser.corporates?.name || 'Thành viên Độc lập'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* CỘT PHẢI: KHU VỰC THIẾT LẬP HỒ SƠ */}
+        <div className="lg:col-span-3">
+          {!isOptIn ? (
+            <div className="bg-white border border-slate-200 rounded-[2rem] py-20 px-8 text-center flex flex-col items-center shadow-sm">
+              <div className="w-32 h-32 bg-slate-50 rounded-full flex items-center justify-center mb-6 border-4 border-slate-100 shadow-inner">
+                <i className="ph-fill ph-detective text-6xl text-slate-300"></i>
+              </div>
+              <h4 className="text-2xl font-black text-slate-800">Bạn đang ở Chế độ Ẩn danh</h4>
+              <p className="text-slate-500 font-medium mt-3 max-w-lg leading-relaxed text-lg">Hồ sơ cá nhân của bạn hiện không hiển thị trên sàn Talent Hub. Bật công tắc phía trên để bắt đầu xây dựng thương hiệu chuyên gia và thu hút cơ hội mới.</p>
+            </div>
+          ) : (
+            <div className="space-y-6 animate-in slide-in-from-bottom-8">
+              
+              {/* TRẠNG THÁI KIỂM DUYỆT */}
+              {myTalentProfile && (
+                <div className={`p-5 rounded-2xl border flex items-start gap-4 ${myTalentProfile.status === 'VERIFIED' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : myTalentProfile.status === 'REJECTED' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${myTalentProfile.status === 'VERIFIED' ? 'bg-emerald-200' : myTalentProfile.status === 'REJECTED' ? 'bg-rose-200' : 'bg-amber-200'}`}>
+                    <i className={`ph-fill text-xl ${myTalentProfile.status === 'VERIFIED' ? 'ph-check-circle text-emerald-700' : myTalentProfile.status === 'REJECTED' ? 'ph-warning-circle text-rose-700' : 'ph-clock-countdown text-amber-700'}`}></i>
+                  </div>
+                  <div className="mt-0.5">
+                    <p className="text-base font-black tracking-wide uppercase">
+                      Trạng thái: {myTalentProfile.status === 'VERIFIED' ? 'Đã duyệt (Verified Expert)' : myTalentProfile.status === 'PENDING' ? 'Đang chờ thẩm định' : 'Cần bổ sung thông tin'}
+                    </p>
+                    <p className="text-sm font-medium mt-1 opacity-90 leading-relaxed">
+                      {myTalentProfile.status === 'VERIFIED' 
+                        ? 'Hồ sơ của bạn đã đạt chuẩn và đang hiển thị công khai trên hệ thống Talent Hub.' 
+                        : myTalentProfile.status === 'REJECTED' 
+                        ? 'Hồ sơ bị từ chối. Vui lòng cập nhật rõ ràng hơn lịch sử làm việc để Admin xét duyệt lại.' 
+                        : 'Ban thẩm định NKBA đang kiểm tra tính xác thực hồ sơ năng lực của bạn.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION 1: TỔNG QUAN */}
+              <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
+                <h3 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-4 mb-6 flex items-center gap-2">
+                  <i className="ph-fill ph-identification-card text-[#002D62]"></i> Thông tin cơ bản
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Họ và Tên (*)</label><input type="text" value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all" /></div>
+                  <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Chức danh / Định vị chuyên môn (*)</label><input type="text" value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all" placeholder="VD: Giám đốc Dự án | Chuyên gia MEP" /></div>
+                  <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email liên hệ</label><input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-indigo-400 transition-all" /></div>
+                  <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Số điện thoại</label><input type="tel" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold font-mono text-slate-800 outline-none focus:bg-white focus:border-indigo-400 transition-all" /></div>
+                  <div className="col-span-1 md:col-span-2 space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Link LinkedIn cá nhân (Nếu có)</label><input type="url" value={form.linkedin_url} onChange={e => setForm({...form, linkedin_url: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-blue-600 outline-none focus:bg-white focus:border-indigo-400 transition-all" placeholder="https://linkedin.com/in/..." /></div>
+                </div>
+              </div>
+
+              {/* SECTION 2: BIO & SKILLS */}
+              <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
+                <h3 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-4 mb-6 flex items-center gap-2">
+                  <i className="ph-fill ph-user-focus text-[#002D62]"></i> Năng lực cốt lõi
+                </h3>
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tổng số năm kinh nghiệm</label><input type="number" value={form.experience_years} onChange={e => setForm({...form, experience_years: parseInt(e.target.value) || 0})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-indigo-400 transition-all" /></div>
+                    <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mức lương / Ngân sách dự kiến</label><input type="text" value={form.expected_salary} onChange={e => setForm({...form, expected_salary: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-indigo-400 transition-all" placeholder="VD: Thỏa thuận / 40M+" /></div>
+                  </div>
+                  <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Kỹ năng chuyên môn (Cách nhau dấu phẩy)</label><input type="text" value={form.skills} onChange={e => setForm({...form, skills: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-indigo-700 outline-none focus:bg-white focus:border-indigo-400 transition-all" placeholder="VD: Quản lý chi phí, Đấu thầu quốc tế, BIM, Revit..." /></div>
+                  <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Giới thiệu bản thân (Summary)</label><textarea value={form.bio} onChange={e => setForm({...form, bio: e.target.value})} className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none resize-none focus:bg-white focus:border-indigo-400 transition-all" placeholder="Viết một đoạn ngắn giới thiệu về triết lý làm việc và những thành tựu tự hào nhất..." /></div>
+                </div>
+              </div>
+
+              {/* SECTION 3: KINH NGHIỆM LÀM VIỆC */}
+              <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
+                  <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <i className="ph-fill ph-briefcase-metal text-[#002D62]"></i> Kinh nghiệm làm việc
+                  </h3>
+                  <button onClick={addExperience} className="text-sm font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+                    <i className="ph-bold ph-plus"></i> Thêm nơi làm việc
+                  </button>
+                </div>
+                
+                <div className="space-y-8">
+                  {form.experiences.map((exp, index) => (
+                    <div key={index} className="relative bg-slate-50 p-6 rounded-2xl border border-slate-200 group">
+                      {index > 0 && (
+                        <button onClick={() => removeExperience(index)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white border border-rose-100 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-colors shadow-sm">
+                          <i className="ph-bold ph-trash"></i>
+                        </button>
+                      )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 pr-10">
+                        <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tên Công ty / Dự án</label><input type="text" value={exp.company} onChange={(e) => updateExperience(index, 'company', e.target.value)} className="w-full h-11 px-4 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-400" placeholder="VD: Tập đoàn Xây dựng ABC" /></div>
+                        <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Chức vụ</label><input type="text" value={exp.role} onChange={(e) => updateExperience(index, 'role', e.target.value)} className="w-full h-11 px-4 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-400" placeholder="VD: Kỹ sư trưởng" /></div>
+                        <div className="space-y-1.5 md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Thời gian (VD: 01/2020 - Hiện tại)</label><input type="text" value={exp.period} onChange={(e) => updateExperience(index, 'period', e.target.value)} className="w-full h-11 px-4 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-400" /></div>
+                        <div className="space-y-1.5 md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mô tả công việc & Thành tựu</label><textarea value={exp.description} onChange={(e) => updateExperience(index, 'description', e.target.value)} className="w-full h-24 p-4 bg-white border border-slate-200 rounded-lg text-sm font-medium outline-none resize-none focus:border-indigo-400" placeholder="Liệt kê các đầu việc chính và kết quả đạt được..." /></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* SECTION 4: HỌC VẤN & BẰNG CẤP */}
+              <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
+                  <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <i className="ph-fill ph-graduation-cap text-[#002D62]"></i> Học vấn & Bằng cấp
+                  </h3>
+                  <button onClick={addEducation} className="text-sm font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+                    <i className="ph-bold ph-plus"></i> Thêm trường
+                  </button>
+                </div>
+                
+                <div className="space-y-6">
+                  {form.education.map((edu, index) => (
+                    <div key={index} className="relative bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                       {index > 0 && (
+                        <button onClick={() => removeEducation(index)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white border border-rose-100 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-colors shadow-sm">
+                          <i className="ph-bold ph-trash"></i>
+                        </button>
+                      )}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pr-10">
+                        <div className="space-y-1.5 md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Trường / Đơn vị cấp bằng</label><input type="text" value={edu.school} onChange={(e) => updateEducation(index, 'school', e.target.value)} className="w-full h-11 px-4 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-400" placeholder="VD: Đại học Kiến trúc HN" /></div>
+                        <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Năm tốt nghiệp</label><input type="text" value={edu.year} onChange={(e) => updateEducation(index, 'year', e.target.value)} className="w-full h-11 px-4 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-400" placeholder="VD: 2018" /></div>
+                        <div className="space-y-1.5 md:col-span-3"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tên bằng / Ngành học</label><input type="text" value={edu.degree} onChange={(e) => updateEducation(index, 'degree', e.target.value)} className="w-full h-11 px-4 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-400" placeholder="VD: Kỹ sư Xây dựng dân dụng" /></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* SECTION 5: CHỨNG CHỈ (MỚI) */}
+              <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
+                  <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <i className="ph-fill ph-certificate text-[#002D62]"></i> Chứng chỉ & Giải thưởng
+                  </h3>
+                  <button onClick={addCertificate} className="text-sm font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+                    <i className="ph-bold ph-plus"></i> Thêm chứng chỉ
+                  </button>
+                </div>
+                
+                <div className="space-y-6">
+                  {form.certificates.map((cert, index) => (
+                    <div key={index} className="relative bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                       {index > 0 && (
+                        <button onClick={() => removeCertificate(index)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white border border-rose-100 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-colors shadow-sm">
+                          <i className="ph-bold ph-trash"></i>
+                        </button>
+                      )}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pr-10">
+                        <div className="space-y-1.5 md:col-span-3"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tên Chứng chỉ / Giải thưởng</label><input type="text" value={cert.name} onChange={(e) => updateCertificate(index, 'name', e.target.value)} className="w-full h-11 px-4 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-400" placeholder="VD: Chứng chỉ Quản lý Dự án (PMP)" /></div>
+                        <div className="space-y-1.5 md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tổ chức cấp</label><input type="text" value={cert.organization} onChange={(e) => updateCertificate(index, 'organization', e.target.value)} className="w-full h-11 px-4 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-400" placeholder="VD: Project Management Institute" /></div>
+                        <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Năm cấp</label><input type="text" value={cert.year} onChange={(e) => updateCertificate(index, 'year', e.target.value)} className="w-full h-11 px-4 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-400" placeholder="VD: 2023" /></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* SECTION 6: NGOẠI NGỮ (MỚI) */}
+              <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
+                  <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <i className="ph-fill ph-translate text-[#002D62]"></i> Ngoại ngữ
+                  </h3>
+                  <button onClick={addLanguage} className="text-sm font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+                    <i className="ph-bold ph-plus"></i> Thêm ngoại ngữ
+                  </button>
+                </div>
+                
+                <div className="space-y-4">
+                  {form.languages.map((lang, index) => (
+                    <div key={index} className="relative bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row gap-4 items-end">
+                      <div className="flex-1 w-full space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ngôn ngữ</label>
+                        <input type="text" value={lang.language} onChange={(e) => updateLanguage(index, 'language', e.target.value)} className="w-full h-11 px-4 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-400" placeholder="VD: Tiếng Anh, Tiếng Nhật..." />
+                      </div>
+                      <div className="flex-1 w-full space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Trình độ</label>
+                        <select value={lang.proficiency} onChange={(e) => updateLanguage(index, 'proficiency', e.target.value)} className="w-full h-11 px-4 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-400 cursor-pointer">
+                          <option value="Cơ bản">Cơ bản (Sơ cấp)</option>
+                          <option value="Giao tiếp">Giao tiếp (Trung cấp)</option>
+                          <option value="Thành thạo">Thành thạo (Cao cấp / N1, N2, IELTS)</option>
+                          <option value="Bản ngữ">Bản ngữ</option>
+                        </select>
+                      </div>
+                      {index > 0 && (
+                        <button onClick={() => removeLanguage(index)} className="w-11 h-11 shrink-0 rounded-lg bg-white border border-rose-100 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-colors shadow-sm">
+                          <i className="ph-bold ph-trash"></i>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* THANH LƯU CỐ ĐỊNH Ở DƯỚI */}
+              <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 p-4 px-6 md:px-10 z-50 flex justify-end">
+                <div className="max-w-7xl w-full mx-auto flex justify-end">
+                  <button onClick={handleSaveProfile} disabled={isSaving} className="h-14 px-10 bg-indigo-600 text-white rounded-2xl text-sm font-black shadow-xl shadow-indigo-600/30 hover:bg-indigo-700 hover:-translate-y-1 transition-all disabled:opacity-50 flex items-center gap-2">
+                    {isSaving ? <><i className="ph-bold ph-spinner animate-spin text-xl"></i> ĐANG LƯU HỒ SƠ...</> : <><i className="ph-bold ph-floppy-disk text-xl"></i> XUẤT BẢN HỒ SƠ CHUYÊN GIA</>}
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

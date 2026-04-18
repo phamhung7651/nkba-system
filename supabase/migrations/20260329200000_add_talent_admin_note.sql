@@ -1,0 +1,1 @@
+ALTER TABLE public.talents ADD COLUMN IF NOT EXISTS admin_note TEXT;
