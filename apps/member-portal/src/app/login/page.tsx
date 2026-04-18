@@ -195,7 +195,7 @@ export default function LoginPage() {
 
             {/* BỔ SUNG: Nút tắt dành cho Admin (Trỏ về Admin Workspace) */}
             <a 
-              href="http://localhost:3002/login" 
+              href="admin.nkba.vn" 
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 bg-slate-50 text-xs font-bold text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-all"
               title="Truy cập khu vực Ban Quản Trị"
             >
