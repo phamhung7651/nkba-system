@@ -61,14 +61,14 @@ export default function Sidebar() {
       {/* LỚP PHỦ MÀN HÌNH MỜ (OVERLAY) - CHỈ HIỆN KHI MỞ TRÊN MOBILE */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden transition-opacity"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[998] md:hidden transition-opacity"
           onClick={() => setIsOpen(false)}
         ></div>
       )}
 
       {/* KHUNG SIDEBAR CHÍNH */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-72 md:w-64 bg-[#002D62] text-white flex flex-col h-full shadow-2xl md:shadow-xl
+        fixed inset-y-0 left-0 z-[999] w-72 md:w-64 bg-[#002D62] text-white flex flex-col h-full shadow-2xl md:shadow-xl
         transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>

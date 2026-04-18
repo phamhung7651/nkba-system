@@ -112,7 +112,7 @@ export default function RootLayout({
               <div>
                 <h4 className="text-white font-bold mb-6 uppercase tracking-wider text-sm">Portal</h4>
                 <ul className="space-y-4 text-sm font-medium">
-                  <li><a href="http://localhost:3001/login" className="hover:text-blue-400 transition-colors">Đăng nhập thành viên</a></li>
+                  <li><a href="https://portal.nkba.vn/login" className="hover:text-blue-400 transition-colors">Đăng nhập thành viên</a></li>
                   
                   {/* ĐÃ SỬA: Đổi lại thành /dang-ky */}
                   <li><Link href="/dang-ky" className="hover:text-blue-400 transition-colors">Đăng ký hội viên mới</Link></li>

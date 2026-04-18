@@ -237,7 +237,7 @@ export default function JoinAlliancePage() {
               <div className="mt-10 bg-emerald-50 p-6 rounded-2xl border border-emerald-100 leading-relaxed text-emerald-900 font-medium space-y-4">
                 <p>Vì bạn đăng ký <strong>Gói Khởi đầu (Miễn phí)</strong>, hệ thống đã tự động kích hoạt tài khoản của bạn ngay lập tức.</p>
                 <p>Bạn đã có thể sử dụng Email và Mật khẩu vừa tạo để đăng nhập vào Member Portal để bắt đầu kết nối.</p>
-                <a href="http://localhost:3001/login" className="inline-flex h-12 px-8 mt-4 bg-emerald-600 text-white font-bold rounded-xl items-center gap-2 shadow-md hover:bg-emerald-700 transition-colors">VÀO PORTAL THÀNH VIÊN <i className="ph-bold ph-arrow-right"></i></a>
+                <a href="https://portal.nkba.vn/login" className="inline-flex h-12 px-8 mt-4 bg-emerald-600 text-white font-bold rounded-xl items-center gap-2 shadow-md hover:bg-emerald-700 transition-colors">VÀO PORTAL THÀNH VIÊN <i className="ph-bold ph-arrow-right"></i></a>
               </div>
             ) : selectedTier.includes('Cần tư vấn') ? (
                <div className="mt-10 bg-slate-50 p-6 rounded-2xl border space-y-3 font-medium text-slate-700 leading-relaxed border-slate-100">
@@ -270,7 +270,7 @@ export default function JoinAlliancePage() {
                   <span>Sau khi chuyển khoản, bạn có thể Đăng nhập ngay vào Portal để nộp ảnh chụp Biên lai (Nếu hệ thống chưa duyệt tự động). Nhân viên NKBA sẽ đối soát nhanh nhất để ACTIVE thẻ của bạn.</span>
                 </div>
                 <div className="flex justify-center pt-4">
-                  <a href="http://localhost:3001/login" className="inline-flex h-12 px-8 bg-[#002D62] text-white font-bold rounded-xl items-center gap-2 shadow-md hover:bg-blue-900 transition-colors">VÀO PORTAL ĐỂ NỘP BIÊN LAI <i className="ph-bold ph-arrow-right"></i></a>
+                  <a href="https://portal.nkba.vn/login" className="inline-flex h-12 px-8 bg-[#002D62] text-white font-bold rounded-xl items-center gap-2 shadow-md hover:bg-blue-900 transition-colors">VÀO PORTAL ĐỂ NỘP BIÊN LAI <i className="ph-bold ph-arrow-right"></i></a>
                 </div>
               </div>
             )}
