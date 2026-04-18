@@ -27,8 +27,8 @@ export default function StrategyVisionPage() {
 
   const handleSave = async () => {
     setIsSaving(true);
-    const payload = { ...period, is_active: true };
-    delete payload.id; 
+    const { id, ...restPeriod } = period; // Tách riêng cái 'id' ra
+    const payload = { ...restPeriod, is_active: true }; // Chỉ gom những phần còn lại vào payload
 
     let res;
     if (period.id) res = await supabase.from('strategic_periods').update(payload).eq('id', period.id).select().single();
