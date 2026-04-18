@@ -14,9 +14,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<any>(null);
 
-  // STATE THÔNG BÁO
+  // STATE THÔNG BÁO VÀ MENU MOBILE
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotiPanel, setShowNotiPanel] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false); // <--- State mới cho Menu điện thoại
 
   // Khởi tạo Supabase
   const supabase = createClient();
@@ -131,12 +132,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           
           {/* CHỈ HIỂN THỊ HEADER NẾU KHÔNG PHẢI LÀ TRANG LOGIN */}
           {!isLoginPage && (
-            <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
-              <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm relative">
+              <div className="max-w-7xl mx-auto px-4 md:px-6 h-20 flex items-center justify-between">
                 
-                {/* KHU VỰC LOGO & MENU TRÁI */}
+                {/* KHU VỰC LOGO & MENU TRÁI (Bản Desktop) */}
                 <div className="flex items-center gap-10">
-                  <Link href="/" className="flex items-center gap-2 group">
+                  <Link href="/" className="flex items-center gap-2 group" onClick={() => setShowMobileMenu(false)}>
                     <div className="w-10 h-10 bg-[#002D62] rounded-xl flex items-center justify-center text-white font-black text-xl tracking-tighter shadow-md group-hover:bg-blue-800 transition-colors">NK</div>
                     <span className="font-black text-xl text-[#002D62] tracking-tight hidden md:block">PORTAL</span>
                   </Link>
@@ -153,12 +154,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   </nav>
                 </div>
 
-                {/* KHU VỰC GÓC PHẢI (CHUÔNG BÁO + USER PROFILE + ĐĂNG XUẤT) */}
-                <div className="flex items-center gap-4 relative">
+                {/* KHU VỰC GÓC PHẢI */}
+                <div className="flex items-center gap-2 md:gap-4 relative">
                   
                   {/* NÚT CHUÔNG BÁO */}
                   <button 
-                    onClick={() => setShowNotiPanel(!showNotiPanel)} 
+                    onClick={() => {
+                      setShowNotiPanel(!showNotiPanel);
+                      setShowMobileMenu(false); // Tắt menu mobile khi mở chuông
+                    }} 
                     className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors relative ${showNotiPanel ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 border border-slate-200 text-slate-500 hover:text-blue-600'}`}
                   >
                     <i className="ph ph-bell text-xl"></i>
@@ -167,7 +171,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
                   {/* DROPDOWN THÔNG BÁO */}
                   {showNotiPanel && (
-                    <div className="absolute top-14 right-40 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col z-[100] animate-in slide-in-from-top-2">
+                    <div className="absolute top-14 right-10 md:right-40 w-[300px] md:w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col z-[100] animate-in slide-in-from-top-2">
                       <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
                         <h4 className="font-black text-slate-800">Thông báo</h4>
                         {unreadCount > 0 && <span className="text-[10px] font-bold bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full">{unreadCount} mới</span>}
@@ -200,11 +204,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     </div>
                   )}
 
-                  <div className="h-8 w-px bg-slate-200 mx-2 hidden md:block"></div>
+                  <div className="h-8 w-px bg-slate-200 mx-1 hidden md:block"></div>
                   
-                  {/* USER PROFILE AVATAR (Linh động theo màu của Admin / User) */}
+                  {/* USER PROFILE AVATAR */}
                   {currentUser ? (
-                    <Link href="/profile" className="flex items-center gap-3 cursor-pointer group hover:bg-slate-50 p-1.5 pr-3 rounded-full transition-colors">
+                    <Link href="/profile" className="flex items-center gap-3 cursor-pointer group hover:bg-slate-50 p-1.5 pr-1.5 md:pr-3 rounded-full transition-colors" onClick={() => setShowMobileMenu(false)}>
                       <div className="text-right hidden md:block">
                         <p className={`text-sm font-black leading-tight transition-colors ${currentUser.is_admin ? 'text-rose-600' : 'text-slate-900 group-hover:text-blue-600'}`}>
                           {currentUser.name}
@@ -219,21 +223,63 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     </Link>
                   ) : (
                     <div className="text-sm font-bold text-slate-400 animate-pulse flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-slate-200"></div> Đang tải...
+                      <div className="w-8 h-8 rounded-full bg-slate-200"></div> <span className="hidden md:inline">Đang tải...</span>
                     </div>
                   )}
 
-                  {/* NÚT ĐĂNG XUẤT */}
+                  {/* NÚT ĐĂNG XUẤT (Ẩn trên mobile để đưa vào Menu trượt cho gọn) */}
                   <button 
                     onClick={handleLogout}
                     title="Đăng xuất"
-                    className="w-10 h-10 ml-2 rounded-full flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                    className="hidden md:flex w-10 h-10 ml-2 rounded-full items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
                   >
                     <i className="ph ph-sign-out text-xl"></i>
                   </button>
 
+                  {/* NÚT HAMBURGER DÀNH CHO MOBILE */}
+                  <button 
+                    onClick={() => {
+                      setShowMobileMenu(!showMobileMenu);
+                      setShowNotiPanel(false); // Tắt chuông khi mở menu
+                    }}
+                    className="lg:hidden w-10 h-10 ml-1 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600 hover:text-blue-600 transition-colors"
+                  >
+                    <i className={`ph ${showMobileMenu ? 'ph-x' : 'ph-list'} text-xl`}></i>
+                  </button>
+
                 </div>
               </div>
+
+              {/* KHU VỰC MENU TRƯỢT TRÊN MOBILE */}
+              {showMobileMenu && (
+                <div className="lg:hidden absolute top-full left-0 w-full bg-white border-t border-b border-slate-200 shadow-xl animate-in slide-in-from-top-2">
+                  <nav className="flex flex-col px-4 py-4 gap-2">
+                    {navItems.map(item => {
+                      const isActive = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path));
+                      return (
+                        <Link 
+                          key={item.path} 
+                          href={item.path} 
+                          onClick={() => setShowMobileMenu(false)} // Bấm xong tự động đóng menu
+                          className={`px-4 py-3 rounded-xl text-base font-bold flex items-center gap-3 transition-all ${isActive ? 'bg-blue-50 text-[#002D62]' : 'text-slate-600 hover:bg-slate-50'}`}
+                        >
+                          <i className={`${item.icon} text-xl`}></i> {item.name}
+                        </Link>
+                      );
+                    })}
+                    
+                    <div className="h-px bg-slate-100 my-2"></div>
+                    
+                    {/* Đưa nút Đăng xuất vào trong Menu Mobile cho dễ bấm */}
+                    <button 
+                      onClick={handleLogout}
+                      className="px-4 py-3 rounded-xl text-base font-bold flex items-center gap-3 text-rose-500 hover:bg-rose-50 transition-all text-left"
+                    >
+                      <i className="ph ph-sign-out text-xl"></i> Đăng xuất
+                    </button>
+                  </nav>
+                </div>
+              )}
             </header>
           )}
 
