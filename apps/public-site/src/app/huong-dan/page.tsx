@@ -101,8 +101,8 @@ export default function GuidePage() {
             <Link href="/lien-he" className="bg-amber-500 text-[#002D62] px-8 py-3 rounded-xl font-bold hover:bg-amber-400 transition-colors">
               Liên hệ Ban thư ký
             </Link>
-            <a href="mailto:support@nkba.vn" className="bg-white/10 text-white px-8 py-3 rounded-xl font-bold hover:bg-white/20 border border-white/20 transition-colors">
-              support@nkba.vn
+            <a href="mailto:contact@nkba.vn" className="bg-white/10 text-white px-8 py-3 rounded-xl font-bold hover:bg-white/20 border border-white/20 transition-colors">
+              contact@nkba.vn
             </a>
           </div>
         </div>
