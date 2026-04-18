@@ -126,7 +126,7 @@ export default function RootLayout({
                 <ul className="space-y-4 text-sm font-medium">
                   <li className="flex items-start gap-3">
                     <i className="ph-fill ph-map-pin text-xl text-blue-500 mt-0.5"></i>
-                    <span>Tầng 15, Tòa nhà Bitexco, Quận 1, TP. Hồ Chí Minh</span>
+                    <span>14-15A, Tầng 7, Tòa nhà Charmvit, Số 117 Trần Duy Hưng, phường Yên Hòa, Hà Nội</span>
                   </li>
                   <li className="flex items-center gap-3">
                     <i className="ph-fill ph-envelope-simple text-xl text-blue-500"></i>
