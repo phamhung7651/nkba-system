@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import Link from 'next/link'; // [BỔ SUNG IMPORT QUAN TRỌNG]
+import Link from 'next/link';
 
 export default function StrategyVisionPage() {
   const supabase = createClient();
@@ -44,8 +44,8 @@ export default function StrategyVisionPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-20 relative">
       
-      {/* 1. HEADER */}
-      <div className="sticky top-4 z-50 bg-[#002D62] p-6 md:px-8 rounded-[2rem] shadow-2xl shadow-blue-900/20 text-white border border-blue-800/50 backdrop-blur-xl transition-all">
+      {/* 1. HEADER - ĐÃ GỠ BỎ NAM CHÂM STICKY VÀ ĐƯA VỀ RELATIVE Z-10 */}
+      <div className="relative z-10 bg-[#002D62] p-6 md:px-8 rounded-[2rem] shadow-2xl shadow-blue-900/20 text-white border border-blue-800/50 backdrop-blur-xl transition-all">
          <div className="absolute top-0 right-0 bottom-0 w-1/2 bg-gradient-to-l from-white/10 to-transparent pointer-events-none rounded-r-[2rem]"></div>
          <div className="relative z-10 flex flex-col gap-3">
             <p className="text-blue-200/90 font-bold text-[10px] md:text-xs uppercase tracking-[0.2em] flex items-center gap-2">
@@ -107,7 +107,7 @@ export default function StrategyVisionPage() {
         </div>
       </div>
 
-      {/* 3. CHIẾN LƯỢC THEO GIAI ĐOẠN (Đã fix lỗi lệch nút) */}
+      {/* 3. CHIẾN LƯỢC THEO GIAI ĐOẠN */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
         
         {/* DÀI HẠN */}
