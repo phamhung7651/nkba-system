@@ -53,7 +53,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           setCurrentUser({
             id: profile.id,
             name: profile.full_name,
-            tier: profile.individual_tiers?.name,
+            tier: Array.isArray(profile.individual_tiers) 
+        ? profile.individual_tiers[0]?.name 
+        : (profile.individual_tiers as any)?.name,
             is_admin: false
           });
 
