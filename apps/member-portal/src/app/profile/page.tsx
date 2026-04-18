@@ -62,7 +62,7 @@ export default function MemberProfilePage() {
               experiences: [{ company: '', role: '', period: '', description: '' }],
               education: [{ school: '', degree: '', year: '' }],
               certificates: [{ name: '', organization: '', year: '' }],
-              languages: [{ language: '', proficiency: 'Giao tiếp' }]
+              languages: [{ language: '', proficiency: '' }]
             }));
           }
         }
