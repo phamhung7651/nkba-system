@@ -93,7 +93,7 @@ export default function TiersConfigPage() {
       {activeTab === 'individual' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           {/* Form thêm mới Cá nhân */}
-          <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm sticky top-6">
+          <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm relative lg:sticky lg:top-6">
             <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
               <i className="ph-bold ph-plus-circle text-amber-500 text-xl"></i> Tạo gói Cá nhân
             </h3>
@@ -142,7 +142,7 @@ export default function TiersConfigPage() {
       {activeTab === 'corporate' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           {/* Form thêm mới Doanh nghiệp */}
-          <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm sticky top-6">
+          <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm relative lg:sticky lg:top-6">
             <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
               <i className="ph-bold ph-plus-circle text-blue-600 text-xl"></i> Tạo gói Doanh nghiệp
             </h3>

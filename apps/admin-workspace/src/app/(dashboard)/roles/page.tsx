@@ -219,7 +219,7 @@ export default function DynamicRolesPage() {
       {/* TAB 2: KHAI BÁO VAI TRÒ */}
       {activeTab === 'roles' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          <div className={`bg-white p-6 rounded-2xl border shadow-sm sticky top-6 transition-all ${editingRoleCode ? 'ring-2 ring-amber-400 border-amber-200 bg-amber-50/30' : 'border-slate-200'}`}>
+          <div className={`bg-white p-6 rounded-2xl border shadow-sm relative lg:sticky lg:top-6 transition-all ${editingRoleCode ? 'ring-2 ring-amber-400 border-amber-200 bg-amber-50/30' : 'border-slate-200'}`}>
             <h3 className="font-bold text-slate-800 mb-5 flex items-center gap-2">
               <i className={`ph-bold ${editingRoleCode ? 'ph-pencil-simple text-amber-500' : 'ph-plus-circle text-blue-600'} text-xl`}></i> 
               {editingRoleCode ? 'Chỉnh sửa Vai trò' : 'Thêm Vai trò mới'}
@@ -269,7 +269,7 @@ export default function DynamicRolesPage() {
       {/* TAB 3: KHAI BÁO PHÂN HỆ */}
       {activeTab === 'modules' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          <div className={`bg-white p-6 rounded-2xl border shadow-sm sticky top-6 transition-all ${editingModPath ? 'ring-2 ring-amber-400 border-amber-200 bg-amber-50/30' : 'border-slate-200'}`}>
+          <div className={`bg-white p-6 rounded-2xl border shadow-sm relativelg:sticky lg:top-6 transition-all ${editingModPath ? 'ring-2 ring-amber-400 border-amber-200 bg-amber-50/30' : 'border-slate-200'}`}>
             <h3 className="font-bold text-slate-800 mb-5 flex items-center gap-2">
               <i className={`ph-bold ${editingModPath ? 'ph-pencil-simple text-amber-500' : 'ph-plus-circle text-emerald-600'} text-xl`}></i> 
               {editingModPath ? 'Chỉnh sửa Phân hệ' : 'Thêm Phân hệ mới'}
