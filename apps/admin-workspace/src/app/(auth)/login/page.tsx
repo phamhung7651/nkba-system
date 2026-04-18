@@ -154,7 +154,7 @@ export default function AdminLoginPage() {
         </form>
 
         <div className="mt-8 pt-6 border-t border-slate-800 text-center">
-          <a href="http://localhost:3001/login" className="text-xs font-bold text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center gap-1.5">
+          <a href="https://portal.nkba.vn/login" className="text-xs font-bold text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center gap-1.5">
             <i className="ph-bold ph-arrow-left"></i>
             Quay lại cổng Hội viên
           </a>

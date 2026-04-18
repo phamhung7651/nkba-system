@@ -61,7 +61,7 @@ export default function RootLayout({
               <Link href="/dang-ky" className="hidden lg:block text-sm font-bold text-slate-500 hover:text-[#002D62] transition-colors">
                 Trở thành hội viên
               </Link>
-              <a href="http://localhost:3001/login" className="px-5 py-2.5 sm:px-6 sm:py-3 bg-[#002D62] text-white text-sm font-black rounded-xl hover:bg-blue-900 transition-all shadow-lg shadow-blue-900/20 flex items-center gap-2 group">
+              <a href="https://portal.nkba.vn/login" className="px-5 py-2.5 sm:px-6 sm:py-3 bg-[#002D62] text-white text-sm font-black rounded-xl hover:bg-blue-900 transition-all shadow-lg shadow-blue-900/20 flex items-center gap-2 group">
                 <i className="ph-fill ph-user-circle text-lg"></i>
                 <span className="hidden sm:inline">Đăng nhập Portal</span>
                 <span className="sm:hidden">Portal</span>
