@@ -23,58 +23,56 @@ export default function MemberDashboard() {
         return;
       }
 
-      const individualId = user.user_metadata?.individual_id;
-
       // ==========================================
-      // PHÂN LUỒNG 1: NẾU LÀ HỘI VIÊN BÌNH THƯỜNG
+      // PHÂN LUỒNG 1: TÌM TRONG BẢNG HỘI VIÊN TRƯỚC
+      // (Sử dụng user_auth_id để đối chiếu)
       // ==========================================
-      if (individualId) {
-        const { data, error } = await supabase
-          .from('individuals')
-          .select(`
-            full_name,
-            email,
-            status,
-            individual_tiers(name, code),
-            corporates(name, tax_code)
-          `)
-          .eq('id', individualId)
-          .single();
+      const { data: memberData, error: memberError } = await supabase
+        .from('individuals')
+        .select(`
+          full_name,
+          email,
+          status,
+          individual_tiers(name, code),
+          corporates(name, tax_code)
+        `)
+        .eq('user_auth_id', user.id) // <--- ĐIỂM MẤU CHỐT LÀ ĐÂY!
+        .maybeSingle();
 
-        if (data) {
-          // Bắt buộc phải là ACTIVE mới được vào
-          if (data.status !== 'ACTIVE') {
-            router.push('/login');
-            return;
-          }
-          setMemberInfo({ ...data, is_admin: false });
-        } else {
+      if (memberData) {
+        // Bắt buộc phải là ACTIVE mới được vào
+        if (memberData.status !== 'ACTIVE') {
+          alert('Tài khoản của bạn đang chờ phê duyệt từ Ban Thư Ký!');
           router.push('/login');
           return;
         }
+        setMemberInfo({ ...memberData, is_admin: false });
       } 
       // ==========================================
-      // PHÂN LUỒNG 2: DÀNH CHO SUPER_ADMIN / QUẢN TRỊ VIÊN
+      // PHÂN LUỒNG 2: NẾU KHÔNG PHẢI HỘI VIÊN, TÌM TRONG NHÂN VIÊN (ADMIN)
       // ==========================================
       else {
-        // Thử lấy tên thật của Admin từ bảng employees 
-        // (Nếu bị bảo mật RLS chặn thì bỏ qua, KHÔNG kick ra ngoài)
-        const { data: empData } = await supabase
+        const { data: empData, error: empError } = await supabase
           .from('employees')
           .select('name, role, email')
-          .eq('email', user.email)
-          .single();
+          .eq('email', user.email) // Hoặc eq('auth_id', user.id) tùy DB của bạn
+          .maybeSingle();
 
-        // CẤP QUYỀN TRUY CẬP TỐI CAO ĐỂ ADMIN VÀO PORTAL
-        setMemberInfo({
-          full_name: empData?.name || 'Tổng Giám Đốc (Super Admin)',
-          email: user.email,
-          status: 'ACTIVE',
-          is_admin: true,
-          role: empData?.role || 'SUPER_ADMIN',
-          individual_tiers: { name: 'Quyền Truy cập Tối cao' },
-          corporates: { name: 'Ban Điều Hành NKBA' }
-        });
+        if (empData) {
+          // CẤP QUYỀN TRUY CẬP TỐI CAO ĐỂ ADMIN VÀO PORTAL
+          setMemberInfo({
+            full_name: empData.name,
+            email: user.email,
+            status: 'ACTIVE',
+            is_admin: true,
+            role: empData.role,
+            individual_tiers: { name: 'Quyền Truy cập Tối cao' },
+            corporates: { name: 'Ban Điều Hành NKBA' }
+          });
+        } else {
+          // Khách vãng lai, không có dữ liệu ở cả 2 bảng -> KICK!
+          router.push('/login');
+        }
       }
       
       setLoading(false);
