@@ -6,7 +6,7 @@ import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
 
 export default function MemberDashboard() {
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [memberInfo, setMemberInfo] = useState<any>(null);

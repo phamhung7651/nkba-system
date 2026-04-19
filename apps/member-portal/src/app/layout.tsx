@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const [showNotiPanel, setShowNotiPanel] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
   const isLoginPage = pathname === '/login';
 
   useEffect(() => {
