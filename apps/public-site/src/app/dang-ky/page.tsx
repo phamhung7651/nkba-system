@@ -151,6 +151,16 @@ export default function JoinAlliancePage() {
 
       if (authError) throw new Error('Lỗi tạo tài khoản bảo mật: ' + authError.message);
       
+      // [BỔ SUNG BƯỚC NÀY]: GẮN AUTH ID VÀO HỒ SƠ CÁ NHÂN
+      if (authData.user) {
+        const { error: updateError } = await supabase
+          .from('individuals')
+          .update({ user_auth_id: authData.user.id })
+          .eq('id', finalIndividualId);
+          
+        if (updateError) console.error("Lỗi cập nhật user_auth_id:", updateError);
+      }
+      
       // Tạo cú pháp chuyển khoản
       if (!isFreeTier) {
         setQrContent(`NKBA JOIN ${webhookRefId}`);
