@@ -30,14 +30,26 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;
 
+  // ==========================================
+  // 🕵️‍♂️ CAMERA GIÁM SÁT (HIỂN THỊ TRONG TERMINAL VS CODE)
+  // ==========================================
+  console.log("\n=== 🕵️‍♂️ MIDDLEWARE BÁO CÁO ===");
+  console.log("📍 Đang truy cập URL:", request.url);
+  console.log("📍 Pathname:", path);
+  console.log("👤 Thẻ Auth (User):", user ? `Có (ID: ${user.id})` : "KHÔNG CÓ (NULL)");
+  console.log("================================\n");
+
   // 4. LOGIC 1: CÓ THẺ TỪ mà lại lảng vảng ở trang /login -> Mời vào Dashboard làm việc
   if (user && path === '/login') {
+    console.log("👉 User đã login, mời từ /login về / (Dashboard)");
     return NextResponse.redirect(new URL('/', request.url));
   }
 
   // 5. LOGIC 2: KHÔNG CÓ THẺ TỪ mà lại đòi vào Dashboard -> Đuổi ra trang /login
   if (!user && path !== '/login') {
-    return NextResponse.redirect(new URL('/login', request.url));
+    console.log("🚨 Khách KHÔNG CÓ thẻ, ĐUỔI RA /login");
+    // [QUAN TRỌNG]: Thêm đuôi ?error=middleware_kicked_you để in dấu vết lên thanh URL trình duyệt
+    return NextResponse.redirect(new URL('/login?error=middleware_kicked_you', request.url));
   }
 
   // 6. Hợp lệ -> Cho qua
