@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import Link from 'next/link';
 
 export default function MemberBizLinkPage() {
-  const [supabase] = useState(() => createClient()); // Fix lỗi đa nhân cách
+  const [supabase] = useState(() => createClient());
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'market' | 'my-projects'>('my-projects');
   
@@ -16,11 +17,9 @@ export default function MemberBizLinkPage() {
 
   useEffect(() => {
     const fetchUserAndProjects = async () => {
-      // 1. Lấy mã Auth của người đang đăng nhập
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 2. Truy xuất đúng Profile thật từ bảng individuals
       const { data: profile } = await supabase
         .from('individuals')
         .select('id, full_name, individual_tiers!individuals_tier_id_fkey(name, code)')
@@ -30,7 +29,6 @@ export default function MemberBizLinkPage() {
       if (profile) {
         setCurrentUser(profile);
         
-        // 3. Lấy dự án khớp với ID thật của user
         const { data: projs } = await supabase
           .from('projects')
           .select('*')
@@ -49,7 +47,7 @@ export default function MemberBizLinkPage() {
     
     setIsSubmitting(true);
     const payload = {
-      member_id: currentUser.id, // Dùng đúng ID từ bảng individuals
+      member_id: currentUser.id, 
       title: formData.title, 
       description: formData.description,
       category: formData.category, 
@@ -73,83 +71,170 @@ export default function MemberBizLinkPage() {
 
   const formatMoney = (amount: number) => amount ? amount.toLocaleString('vi-VN') + ' VNĐ' : 'Thỏa thuận';
 
-  if (!currentUser) return <div className="p-20 text-center text-slate-400 font-bold animate-pulse">Đang tải Sàn Giao Dịch...</div>;
+  if (!currentUser) return <div className="flex h-[60vh] items-center justify-center text-slate-400 font-bold"><i className="ph-bold ph-spinner animate-spin text-3xl mr-3 text-[#002D62]"></i> Đang nạp hệ thống...</div>;
 
   return (
-    <div className="space-y-8 animate-in fade-in">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between md:items-end gap-6 border-b border-slate-200 pb-6">
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Sàn Giao Dịch B2B</h1>
-          <p className="text-sm font-medium text-slate-500 mt-2">Nơi khởi nguồn của những hợp đồng triệu đô.</p>
-        </div>
-        <div className="flex gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-          <button onClick={() => setActiveTab('market')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'market' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-900'}`}>Chợ Dự Án Mở</button>
-          <button onClick={() => setActiveTab('my-projects')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'my-projects' ? 'bg-[#002D62] text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>Dự Án Của Tôi</button>
+    // THÊM max-w-7xl mx-auto ĐỂ CĂN GIỮA VÀ GIỚI HẠN CHIỀU RỘNG
+    <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-10 animate-in fade-in duration-500">
+      
+      {/* HEADER & TABS */}
+      <div className="bg-white p-6 md:px-8 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-2 h-full bg-[#002D62]"></div>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+          <div>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+              <i className="ph-fill ph-handshake text-[#002D62]"></i> Sàn Giao Dịch B2B
+            </h1>
+            <p className="text-sm font-medium text-slate-500 mt-2 ml-10">Nơi khởi nguồn của những hợp đồng triệu đô.</p>
+          </div>
+          
+          {/* SEGMENTED CONTROL TABS */}
+          <div className="flex gap-1 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shrink-0 w-full md:w-auto">
+            <button 
+              onClick={() => setActiveTab('market')} 
+              className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-black transition-all ${activeTab === 'market' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Chợ Dự Án Mở
+            </button>
+            <button 
+              onClick={() => setActiveTab('my-projects')} 
+              className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-black transition-all ${activeTab === 'my-projects' ? 'bg-[#002D62] text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Dự Án Của Tôi
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* TAB 1: MARKET (UPSELL) */}
       {activeTab === 'market' && (
-        <div className="bg-white border border-slate-200 rounded-[2rem] p-20 text-center flex flex-col items-center shadow-sm">
-          <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100 shadow-inner">
-            <i className="ph ph-lock-key text-5xl text-slate-300"></i>
+        <div className="bg-gradient-to-br from-amber-50 to-white border border-amber-100 rounded-3xl p-10 md:p-20 text-center flex flex-col items-center shadow-sm relative overflow-hidden group">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+          
+          <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-8 shadow-xl border border-amber-100 relative z-10 group-hover:scale-110 transition-transform duration-500">
+            <i className="ph-fill ph-crown text-5xl text-amber-500"></i>
           </div>
-          <h3 className="text-xl font-black text-slate-800">Khu vực dành riêng cho Hội viên VIP</h3>
-          <p className="text-sm text-slate-500 mt-3 max-w-md leading-relaxed">Nâng cấp hạng thẻ của bạn để xem chi tiết các gói thầu béo bở từ các Chủ đầu tư lớn và tham gia chào giá.</p>
-          <button className="mt-8 px-8 py-3 bg-amber-500 text-[#002D62] rounded-xl font-black shadow-lg hover:bg-amber-400 transition-colors">
-            NÂNG CẤP HẠNG THẺ NGAY
+          
+          <h3 className="text-2xl md:text-3xl font-black text-slate-900 relative z-10 mb-4">Đặc quyền Hội viên Cao cấp</h3>
+          <p className="text-base text-slate-600 max-w-lg leading-relaxed relative z-10 mb-8">
+            Không gian giao thương khép kín. Nâng cấp hạng thẻ của bạn để tiếp cận danh sách thầu nội bộ, xem dự toán chi tiết và kết nối trực tiếp với các Tổng thầu/Chủ đầu tư lớn.
+          </p>
+          
+          <button className="px-10 py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-2xl font-black shadow-lg hover:shadow-amber-500/30 hover:-translate-y-1 transition-all relative z-10 flex items-center gap-2">
+            NÂNG CẤP HẠNG THẺ <i className="ph-bold ph-arrow-right"></i>
           </button>
         </div>
       )}
 
+      {/* TAB 2: MY PROJECTS */}
       {activeTab === 'my-projects' && (
-        <div className="space-y-6 animate-in slide-in-from-bottom-4">
-          <div className="flex justify-between items-center bg-blue-50 border border-blue-100 p-5 rounded-2xl shadow-inner">
-            <p className="text-sm font-bold text-blue-800">Bạn đang cần tìm Nhà thầu phụ hoặc Nhà cung cấp vật tư?</p>
-            <button onClick={() => setShowForm(!showForm)} className="h-11 px-6 bg-blue-600 text-white rounded-xl text-sm font-black shadow-md hover:bg-blue-700 transition-colors flex items-center gap-2">
-              <i className={`ph ${showForm ? 'ph-x' : 'ph-plus'} text-lg`}></i> {showForm ? 'HỦY' : 'ĐĂNG DỰ ÁN MỚI'}
+        <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+          
+          {/* BANNER CTA ĐĂNG DỰ ÁN */}
+          <div className="flex flex-col md:flex-row justify-between items-center bg-gradient-to-r from-[#002D62] to-blue-900 border border-blue-800 p-6 md:p-8 rounded-3xl shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl translate-x-1/4 -translate-y-1/4 pointer-events-none"></div>
+            
+            <div className="mb-6 md:mb-0 relative z-10 text-center md:text-left">
+              <h3 className="text-xl font-black text-white mb-2">Đăng tải Yêu cầu Báo giá / Mời thầu</h3>
+              <p className="text-blue-200 text-sm font-medium">Bạn đang tìm thầu phụ thi công hay nhà cung cấp vật tư? Hãy đưa dự án lên sàn để mạng lưới đối tác NKBA tiếp cận.</p>
+            </div>
+            
+            <button 
+              onClick={() => setShowForm(!showForm)} 
+              className={`relative z-10 shrink-0 h-14 px-8 rounded-2xl text-sm font-black shadow-lg transition-all flex items-center gap-2 ${showForm ? 'bg-slate-800 text-white hover:bg-slate-900 border border-slate-700' : 'bg-white text-[#002D62] hover:bg-blue-50 hover:scale-105'}`}
+            >
+              <i className={`ph-bold ${showForm ? 'ph-x' : 'ph-plus'} text-lg`}></i> 
+              {showForm ? 'HỦY ĐĂNG' : 'TẠO DỰ ÁN MỚI'}
             </button>
           </div>
 
+          {/* FORM ĐĂNG DỰ ÁN MỚI */}
           {showForm && (
-            <div className="bg-white border border-slate-200 p-8 rounded-[2rem] shadow-md animate-in slide-in-from-top-4">
-              <h3 className="text-xl font-black text-slate-900 mb-6 border-b border-slate-100 pb-4">Tạo Yêu cầu Báo giá / Tìm Đối tác</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="col-span-2 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Tên Dự án (*)</label><input type="text" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10" placeholder="VD: Tìm thầu phụ thi công Điện nước..." /></div>
-                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Lĩnh vực</label><select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none cursor-pointer"><option value="CONSTRUCTION">Thi công (Construction)</option><option value="DESIGN">Thiết kế (Design)</option><option value="MATERIAL">Cung cấp vật tư (Material)</option></select></div>
-                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Ngân sách dự kiến (VNĐ)</label><input type="number" value={formData.budget_max} onChange={e => setFormData({...formData, budget_max: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:bg-white focus:border-blue-400" placeholder="VD: 5000000000" /></div>
-                <div className="col-span-2 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Mô tả Yêu cầu</label><textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none resize-none focus:bg-white focus:border-blue-400" placeholder="Yêu cầu chi tiết về năng lực, tiến độ..." /></div>
+            <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm animate-in zoom-in-95 duration-300">
+              <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
+                <i className="ph-fill ph-pencil-line text-[#002D62]"></i> Khai báo Thông tin Dự án
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                <div className="col-span-2 md:col-span-2 space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tên Dự án (*)</label>
+                  <input type="text" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full h-12 px-4 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="VD: Tìm thầu phụ thi công Cơ Điện (MEP)..." />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Lĩnh vực</label>
+                  <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full h-12 px-4 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none cursor-pointer focus:border-blue-400 transition-all">
+                    <option value="CONSTRUCTION">Thi công (Construction)</option>
+                    <option value="DESIGN">Thiết kế (Design)</option>
+                    <option value="MATERIAL">Cung cấp vật tư (Material)</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Ngân sách dự kiến (VNĐ)</label>
+                  <input type="number" value={formData.budget_max} onChange={e => setFormData({...formData, budget_max: e.target.value})} className="w-full h-12 px-4 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="VD: 5000000000" />
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Địa điểm dự án</label>
+                  <input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full h-12 px-4 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="VD: KCN VSIP, Bắc Ninh" />
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Mô tả Yêu cầu chi tiết</label>
+                  <textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full h-32 p-4 bg-white border border-slate-200 rounded-xl text-sm font-medium outline-none resize-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="Yêu cầu chi tiết về năng lực, tiêu chuẩn vật tư, tiến độ..." />
+                </div>
               </div>
-              <div className="mt-8 flex justify-end"><button onClick={handleSubmitProject} disabled={isSubmitting} className="h-12 px-8 bg-[#002D62] text-white rounded-xl text-sm font-black shadow-lg hover:bg-blue-900 transition-colors disabled:opacity-50">{isSubmitting ? 'ĐANG GỬI...' : 'GỬI YÊU CẦU LÊN SÀN'}</button></div>
+              
+              <div className="mt-8 flex justify-end">
+                <button onClick={handleSubmitProject} disabled={isSubmitting} className="h-14 px-10 bg-[#002D62] text-white rounded-2xl text-sm font-black shadow-lg hover:bg-blue-900 transition-colors disabled:opacity-50 flex items-center gap-2">
+                  {isSubmitting ? <><i className="ph-bold ph-spinner animate-spin"></i> ĐANG XỬ LÝ...</> : <><i className="ph-bold ph-paper-plane-right"></i> ĐƯA LÊN SÀN GIAO DỊCH</>}
+                </button>
+              </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
-            {myProjects.length === 0 ? <div className="col-span-full p-10 text-center text-slate-400 italic">Bạn chưa đăng dự án nào.</div> :
-              myProjects.map(p => (
-                <div key={p.id} className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex flex-col hover:shadow-md transition-shadow group">
-                  <div className="flex justify-between items-start mb-4">
-                    <span className={`text-[9px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest ${p.status === 'PENDING' ? 'bg-rose-50 text-rose-600 border border-rose-200' : p.status === 'OPEN' ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
-                      {p.status === 'PENDING' ? 'CHỜ DUYỆT' : p.status}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-100 px-2 py-1 rounded">{p.category}</span>
-                  </div>
-                  <h4 className="text-lg font-black text-slate-900 leading-snug line-clamp-2 mb-2 group-hover:text-blue-600 transition-colors">{p.title}</h4>
-                  <p className="text-sm font-medium text-slate-500 mb-6 line-clamp-2">{p.description || 'Không có mô tả'}</p>
-                  
-                  <div className="mt-auto pt-5 border-t border-slate-100 flex justify-between items-end">
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Ngân sách</p>
-                      <p className="text-sm font-black text-emerald-600">{formatMoney(p.budget_max)}</p>
-                    </div>
-                    <button className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-all">
-                      <i className="ph ph-arrow-right font-bold"></i>
-                    </button>
-                  </div>
+          {/* DANH SÁCH DỰ ÁN */}
+          <div>
+            <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+              <i className="ph-fill ph-folder-open"></i> Kho dự án của bạn
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {myProjects.length === 0 ? (
+                <div className="col-span-full py-16 bg-white border border-slate-200 rounded-3xl text-center flex flex-col items-center">
+                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4"><i className="ph-fill ph-folder-dashed text-3xl text-slate-300"></i></div>
+                  <p className="text-slate-500 font-medium">Bạn chưa đăng dự án nào trên hệ thống.</p>
                 </div>
-              ))
-            }
+              ) : (
+                myProjects.map(p => (
+                  <div key={p.id} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col hover:border-blue-300 hover:shadow-md transition-all group relative overflow-hidden">
+                    
+                    <div className="flex justify-between items-start mb-4 relative z-10">
+                      <span className={`text-[9px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest ${p.status === 'PENDING' ? 'bg-amber-50 text-amber-600 border border-amber-200' : p.status === 'OPEN' ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
+                        {p.status === 'PENDING' ? 'CHỜ DUYỆT' : p.status}
+                      </span>
+                      <span className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-[#002D62] transition-colors">
+                        <i className="ph-bold ph-arrow-up-right"></i>
+                      </span>
+                    </div>
+                    
+                    <div className="relative z-10 mb-6">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{p.category}</p>
+                      <h4 className="text-lg font-black text-slate-900 leading-snug line-clamp-2 group-hover:text-[#002D62] transition-colors">{p.title}</h4>
+                      <div className="flex items-center gap-2 mt-3 text-xs font-bold text-slate-500 bg-slate-50 w-fit px-3 py-1.5 rounded-lg border border-slate-100">
+                        <i className="ph-fill ph-map-pin"></i> {p.location || 'Chưa cập nhật'}
+                      </div>
+                    </div>
+                    
+                    <div className="mt-auto pt-5 border-t border-slate-100 flex justify-between items-end relative z-10">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Ngân sách</p>
+                        <p className="text-base font-black text-emerald-600">{formatMoney(p.budget_max)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
+
         </div>
       )}
     </div>
