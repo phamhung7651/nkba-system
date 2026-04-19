@@ -31,7 +31,21 @@ export default function MemberInsightsPage() {
           ? profile.individual_tiers[0]?.code 
           : (profile.individual_tiers as any)?.code;
 
-        setCurrentUser({ ...profile, tier_code: tierCode });
+        // LẤY CHÙM CHÌA KHÓA TÍNH NĂNG TỪ DATABASE
+        let allowedFeatures: string[] = [];
+        if (tierCode === 'VIP') {
+          allowedFeatures = ['VIEW_MARKET_BUDGET', 'VIEW_MARKET_CONTACT', 'POST_PROJECT', 'VIEW_TALENT_CONTACT', 'POST_JOB', 'REQUEST_CUSTOM_DATA'];
+        } else {
+          const { data: features } = await supabase
+            .from('tier_features')
+            .select('feature_code')
+            .eq('tier_code', tierCode)
+            .eq('can_access', true);
+            
+          if (features) allowedFeatures = features.map(f => f.feature_code);
+        }
+
+        setCurrentUser({ ...profile, tier_code: tierCode, allowedFeatures });
         
         const { data: reps } = await supabase.from('reports').select('*').eq('is_active', true).order('created_at', { ascending: false });
         if (reps) setReports(reps);
@@ -74,6 +88,9 @@ export default function MemberInsightsPage() {
   };
 
   if (!currentUser) return <div className="flex h-[60vh] items-center justify-center text-slate-400 font-bold"><i className="ph-bold ph-spinner animate-spin text-3xl mr-3 text-teal-600"></i> Đang nạp Insights...</div>;
+
+  // KIỂM TRA QUYỀN ĐỘNG TỪ DATABASE
+  const canRequestData = currentUser?.allowedFeatures?.includes('REQUEST_CUSTOM_DATA');
 
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-10 animate-in fade-in duration-500">
@@ -140,54 +157,76 @@ export default function MemberInsightsPage() {
 
       {activeTab === 'requests' && (
         <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
-          <div className="bg-gradient-to-r from-teal-600 to-emerald-700 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 opacity-10"><i className="ph-fill ph-magnifying-glass text-[250px] translate-x-10 -translate-y-10"></i></div>
-            <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
-               <div className="max-w-2xl">
-                 <h3 className="text-2xl font-black mb-3">Yêu cầu Dữ liệu Cá nhân hóa</h3>
-                 <p className="text-teal-50 font-medium leading-relaxed">Bạn cần khảo sát thị trường, tìm kiếm đối tác theo tiêu chí riêng? Ban nghiên cứu NKBA sẽ hỗ trợ thu thập dữ liệu chính xác cho doanh nghiệp bạn.</p>
-               </div>
-               <button onClick={() => setShowForm(!showForm)} className="h-14 px-10 bg-white text-teal-700 rounded-2xl font-black shadow-xl hover:scale-105 transition-all">
-                 {showForm ? 'ĐÓNG FORM' : 'GỬI YÊU CẦU RIÊNG'}
-               </button>
-            </div>
-          </div>
-
-          {showForm && (
-            <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm animate-in zoom-in-95">
-              <div className="space-y-6">
-                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tiêu đề yêu cầu</label><input type="text" value={reqForm.title} onChange={e => setReqForm({...reqForm, title: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none focus:bg-white focus:border-teal-400" placeholder="VD: Khảo sát đơn giá vật liệu tại Tokyo..." /></div>
-                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nội dung chi tiết</label><textarea value={reqForm.content} onChange={e => setReqForm({...reqForm, content: e.target.value})} className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none resize-none focus:bg-white" placeholder="Nêu rõ quy mô, mục đích và thời hạn bạn cần kết quả..." /></div>
-                <div className="flex justify-end"><button onClick={handleSubmitRequest} disabled={isSubmitting} className="h-14 px-10 bg-teal-600 text-white rounded-2xl font-black shadow-lg hover:bg-teal-700 transition-all">GỬI YÊU CẦU ĐẾN BAN QUẢN TRỊ</button></div>
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {myRequests.map(req => (
-              <div key={req.id} className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm group hover:border-teal-300 transition-all">
-                <div className="flex justify-between items-start mb-5">
-                  <span className={`text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest ${req.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {req.status === 'COMPLETED' ? 'Đã phản hồi' : 'Đang xử lý'}
-                  </span>
-                  <p className="text-[10px] font-bold text-slate-400">{new Date(req.created_at).toLocaleDateString('vi-VN')}</p>
+          
+          {canRequestData ? (
+            <>
+              <div className="bg-gradient-to-r from-teal-600 to-emerald-700 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 opacity-10"><i className="ph-fill ph-magnifying-glass text-[250px] translate-x-10 -translate-y-10"></i></div>
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+                  <div className="max-w-2xl">
+                    <h3 className="text-2xl font-black mb-3">Yêu cầu Dữ liệu Cá nhân hóa</h3>
+                    <p className="text-teal-50 font-medium leading-relaxed">Bạn cần khảo sát thị trường, tìm kiếm đối tác theo tiêu chí riêng? Ban nghiên cứu NKBA sẽ hỗ trợ thu thập dữ liệu chính xác cho doanh nghiệp bạn.</p>
+                  </div>
+                  <button onClick={() => setShowForm(!showForm)} className="h-14 px-10 bg-white text-teal-700 rounded-2xl font-black shadow-xl hover:scale-105 transition-all">
+                    {showForm ? 'ĐÓNG FORM' : 'GỬI YÊU CẦU RIÊNG'}
+                  </button>
                 </div>
-                <h4 className="text-lg font-black text-slate-900 mb-2 leading-tight">{req.title}</h4>
-                <p className="text-sm text-slate-500 mb-8">{req.content}</p>
-                
-                {req.status === 'COMPLETED' ? (
-                  <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100">
-                    <p className="text-xs text-emerald-800 font-medium leading-relaxed italic mb-4">"{req.admin_note || 'Ban nghiên cứu đã hoàn tất báo cáo cho yêu cầu của bạn.'}"</p>
-                    <button className="h-10 px-4 bg-white text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-black hover:bg-emerald-600 hover:text-white transition-all uppercase flex items-center gap-2 mx-auto"><i className="ph-fill ph-file-arrow-down text-base"></i> Tải file kết quả</button>
-                  </div>
-                ) : (
-                  <div className="pt-5 border-t border-slate-50 flex items-center gap-2 text-slate-400 italic text-xs font-medium">
-                    <i className="ph ph-clock-countdown animate-pulse"></i> Chờ Ban nghiên cứu liên hệ qua Email/SĐT.
-                  </div>
-                )}
               </div>
-            ))}
-          </div>
+
+              {showForm && (
+                <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm animate-in zoom-in-95">
+                  <div className="space-y-6">
+                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tiêu đề yêu cầu</label><input type="text" value={reqForm.title} onChange={e => setReqForm({...reqForm, title: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none focus:bg-white focus:border-teal-400" placeholder="VD: Khảo sát đơn giá vật liệu tại Tokyo..." /></div>
+                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nội dung chi tiết</label><textarea value={reqForm.content} onChange={e => setReqForm({...reqForm, content: e.target.value})} className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none resize-none focus:bg-white" placeholder="Nêu rõ quy mô, mục đích và thời hạn bạn cần kết quả..." /></div>
+                    <div className="flex justify-end"><button onClick={handleSubmitRequest} disabled={isSubmitting} className="h-14 px-10 bg-teal-600 text-white rounded-2xl font-black shadow-lg hover:bg-teal-700 transition-all">GỬI YÊU CẦU ĐẾN BAN QUẢN TRỊ</button></div>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {myRequests.map(req => (
+                  <div key={req.id} className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm group hover:border-teal-300 transition-all">
+                    <div className="flex justify-between items-start mb-5">
+                      <span className={`text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest ${req.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {req.status === 'COMPLETED' ? 'Đã phản hồi' : 'Đang xử lý'}
+                      </span>
+                      <p className="text-[10px] font-bold text-slate-400">{new Date(req.created_at).toLocaleDateString('vi-VN')}</p>
+                    </div>
+                    <h4 className="text-lg font-black text-slate-900 mb-2 leading-tight">{req.title}</h4>
+                    <p className="text-sm text-slate-500 mb-8">{req.content}</p>
+                    
+                    {req.status === 'COMPLETED' ? (
+                      <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100">
+                        <p className="text-xs text-emerald-800 font-medium leading-relaxed italic mb-4">"{req.admin_note || 'Ban nghiên cứu đã hoàn tất báo cáo cho yêu cầu của bạn.'}"</p>
+                        <button className="h-10 px-4 bg-white text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-black hover:bg-emerald-600 hover:text-white transition-all uppercase flex items-center gap-2 mx-auto"><i className="ph-fill ph-file-arrow-down text-base"></i> Tải file kết quả</button>
+                      </div>
+                    ) : (
+                      <div className="pt-5 border-t border-slate-50 flex items-center gap-2 text-slate-400 italic text-xs font-medium">
+                        <i className="ph ph-clock-countdown animate-pulse"></i> Chờ Ban nghiên cứu liên hệ qua Email/SĐT.
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            
+            /* NẾU KHÔNG CÓ QUYỀN -> HIỆN BANNER KHÓA ĐÒI NÂNG CẤP */
+            <div className="bg-gradient-to-br from-amber-50 to-white border border-amber-200 rounded-[3rem] p-12 md:p-20 text-center flex flex-col items-center shadow-lg relative overflow-hidden group">
+              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+              <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-8 shadow-xl border border-amber-100 relative z-10 group-hover:scale-110 transition-transform duration-500">
+                <i className="ph-fill ph-lock-key text-5xl text-amber-500"></i>
+              </div>
+              <h3 className="text-2xl md:text-3xl font-black text-slate-900 relative z-10 mb-4">Tính năng Đặt hàng Dữ liệu bị khóa</h3>
+              <p className="text-base text-slate-600 max-w-lg leading-relaxed relative z-10 mb-8">
+                Bạn đang sử dụng hạng thẻ <strong className="text-slate-900">{currentUser.tier_code}</strong>. <br/>Vui lòng nâng cấp lên <strong>TITANIUM</strong> hoặc <strong>VIP</strong> để mở khóa quyền yêu cầu Ban nghiên cứu NKBA thu thập dữ liệu thị trường và danh bạ đối tác theo tiêu chí riêng của doanh nghiệp.
+              </p>
+              <button className="px-10 py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-2xl font-black shadow-lg hover:shadow-amber-500/30 hover:-translate-y-1 transition-all relative z-10 flex items-center gap-2">
+                NÂNG CẤP THẺ CAO CẤP <i className="ph-bold ph-arrow-right"></i>
+              </button>
+            </div>
+
+          )}
         </div>
       )}
     </div>

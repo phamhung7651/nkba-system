@@ -32,7 +32,29 @@ export default function MemberTalentHubPage() {
           ? profile.individual_tiers[0]?.code 
           : (profile.individual_tiers as any)?.code;
 
-        setCurrentUser({ ...profile, tier_code: tierCode });
+        // =========================================================
+        // ĐIỂM MẤU CHỐT 1: LẤY CHÙM CHÌA KHÓA TÍNH NĂNG TỪ DATABASE
+        // =========================================================
+        let allowedFeatures: string[] = [];
+        
+        if (tierCode === 'VIP') {
+          // VIP mặc định có tất cả quyền
+          allowedFeatures = ['VIEW_MARKET_BUDGET', 'VIEW_MARKET_CONTACT', 'POST_PROJECT', 'VIEW_TALENT_CONTACT', 'POST_JOB', 'REQUEST_CUSTOM_DATA'];
+        } else {
+          // Quét bảng tier_features để xem Admin cho phép tính năng nào
+          const { data: features } = await supabase
+            .from('tier_features')
+            .select('feature_code')
+            .eq('tier_code', tierCode)
+            .eq('can_access', true);
+            
+          if (features) {
+            allowedFeatures = features.map(f => f.feature_code);
+          }
+        }
+
+        // Lưu mảng quyền vào currentUser
+        setCurrentUser({ ...profile, tier_code: tierCode, allowedFeatures });
         
         const { data: tals } = await supabase.from('talents').select('*').eq('status', 'VERIFIED').order('created_at', { ascending: false });
         if (tals) setTalents(tals);
@@ -68,9 +90,13 @@ export default function MemberTalentHubPage() {
     setIsSubmitting(false);
   };
 
-  const canViewContact = (tierCode: string) => ['PREMIUM', 'TITANIUM', 'VIP', 'GOLD'].includes(tierCode);
-
   if (!currentUser) return <div className="flex h-[60vh] items-center justify-center text-slate-400 font-bold"><i className="ph-bold ph-spinner animate-spin text-3xl mr-3 text-[#002D62]"></i> Đang kết nối Talent Hub...</div>;
+
+  // =========================================================
+  // ĐIỂM MẤU CHỐT 2: KIỂM TRA QUYỀN ĐỘNG (DYNAMIC FEATURE FLAGS)
+  // =========================================================
+  const canViewTalentContact = currentUser?.allowedFeatures?.includes('VIEW_TALENT_CONTACT');
+  const canPostJob = currentUser?.allowedFeatures?.includes('POST_JOB');
 
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-10 animate-in fade-in duration-500">
@@ -93,6 +119,7 @@ export default function MemberTalentHubPage() {
         </div>
       </div>
 
+      {/* TAB 1: TALENT POOL */}
       {activeTab === 'talent-pool' && (
         <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
           {/* BANNER GIỚI THIỆU */}
@@ -128,16 +155,17 @@ export default function MemberTalentHubPage() {
                   </div>
                 </div>
 
-                {canViewContact(currentUser.tier_code) ? (
+                {/* SỬ DỤNG QUYỀN VỪA KIỂM TRA ĐỂ ẨN/HIỆN THÔNG TIN */}
+                {canViewTalentContact ? (
                   <div className="pt-6 border-t border-slate-100 space-y-2">
                     <p className="text-sm font-bold text-slate-700 flex items-center gap-2"><i className="ph-bold ph-envelope text-indigo-500"></i> {talent.email}</p>
                     <p className="text-sm font-bold text-slate-700 flex items-center gap-2"><i className="ph-bold ph-phone text-emerald-500"></i> {talent.phone}</p>
                   </div>
                 ) : (
                   <div className="pt-6 border-t border-slate-100">
-                    <div className="bg-slate-50 p-4 rounded-2xl text-center">
+                    <div className="bg-slate-50 p-4 rounded-2xl text-center border border-slate-100">
                       <i className="ph-fill ph-lock-key text-slate-300 text-xl mb-1"></i>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Nâng cấp VIP để xem Contact</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Nâng cấp thẻ để xem Liên Hệ</p>
                     </div>
                   </div>
                 )}
@@ -147,49 +175,79 @@ export default function MemberTalentHubPage() {
         </div>
       )}
 
+      {/* TAB 2: MY JOBS */}
       {activeTab === 'my-jobs' && (
         <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
-          <div className="flex flex-col md:flex-row justify-between items-center bg-gradient-to-r from-slate-900 to-[#002D62] p-8 rounded-3xl shadow-xl text-white">
-            <div className="mb-6 md:mb-0">
-              <h3 className="text-xl font-black mb-2">Tìm kiếm Nhân sự Cấp cao</h3>
-              <p className="text-blue-200 text-sm font-medium">Đăng tin tuyển dụng để tiếp cận mạng lưới chuyên gia trong Liên minh.</p>
-            </div>
-            <button onClick={() => setShowForm(!showForm)} className="h-14 px-8 bg-white text-[#002D62] rounded-2xl font-black shadow-lg hover:scale-105 transition-all flex items-center gap-2">
-              <i className={`ph-bold ${showForm ? 'ph-x' : 'ph-plus'}`}></i> {showForm ? 'HỦY' : 'ĐĂNG TIN MỚI'}
-            </button>
-          </div>
-
-          {showForm && (
-            <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm animate-in zoom-in-95">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Vị trí tuyển dụng</label><input type="text" value={jobForm.title} onChange={e => setJobForm({...jobForm, title: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none focus:bg-white focus:border-indigo-400" placeholder="VD: Kỹ sư trưởng công trình..." /></div>
-                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Mức lương</label><input type="text" value={jobForm.salary_range} onChange={e => setJobForm({...jobForm, salary_range: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none focus:bg-white focus:border-indigo-400" placeholder="VD: 25 - 40 Triệu" /></div>
-                <div className="col-span-2 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Yêu cầu & Mô tả</label><textarea value={jobForm.requirements} onChange={e => setJobForm({...jobForm, requirements: e.target.value})} className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none resize-none focus:bg-white" placeholder="Mô tả công việc và tiêu chuẩn ứng viên..." /></div>
-              </div>
-              <div className="mt-8 flex justify-end">
-                <button onClick={handleSubmitJob} disabled={isSubmitting} className="h-14 px-10 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2">
-                  {isSubmitting ? <i className="ph-bold ph-spinner animate-spin"></i> : <i className="ph-bold ph-paper-plane-right"></i>} GỬI ADMIN DUYỆT TIN
+          
+          {/* NẾU CÓ QUYỀN ĐĂNG TIN THÌ HIỆN GIAO DIỆN BÌNH THƯỜNG */}
+          {canPostJob ? (
+            <>
+              <div className="flex flex-col md:flex-row justify-between items-center bg-gradient-to-r from-slate-900 to-[#002D62] p-8 rounded-3xl shadow-xl text-white">
+                <div className="mb-6 md:mb-0">
+                  <h3 className="text-xl font-black mb-2">Tìm kiếm Nhân sự Cấp cao</h3>
+                  <p className="text-blue-200 text-sm font-medium">Đăng tin tuyển dụng để tiếp cận mạng lưới chuyên gia trong Liên minh.</p>
+                </div>
+                <button onClick={() => setShowForm(!showForm)} className="h-14 px-8 bg-white text-[#002D62] rounded-2xl font-black shadow-lg hover:scale-105 transition-all flex items-center gap-2">
+                  <i className={`ph-bold ${showForm ? 'ph-x' : 'ph-plus'}`}></i> {showForm ? 'HỦY' : 'ĐĂNG TIN MỚI'}
                 </button>
               </div>
+
+              {showForm && (
+                <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm animate-in zoom-in-95">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Vị trí tuyển dụng</label><input type="text" value={jobForm.title} onChange={e => setJobForm({...jobForm, title: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none focus:bg-white focus:border-indigo-400" placeholder="VD: Kỹ sư trưởng công trình..." /></div>
+                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Mức lương</label><input type="text" value={jobForm.salary_range} onChange={e => setJobForm({...jobForm, salary_range: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none focus:bg-white focus:border-indigo-400" placeholder="VD: 25 - 40 Triệu" /></div>
+                    <div className="col-span-2 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Yêu cầu & Mô tả</label><textarea value={jobForm.requirements} onChange={e => setJobForm({...jobForm, requirements: e.target.value})} className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none resize-none focus:bg-white focus:border-indigo-400" placeholder="Mô tả công việc và tiêu chuẩn ứng viên..." /></div>
+                  </div>
+                  <div className="mt-8 flex justify-end">
+                    <button onClick={handleSubmitJob} disabled={isSubmitting} className="h-14 px-10 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2">
+                      {isSubmitting ? <i className="ph-bold ph-spinner animate-spin"></i> : <i className="ph-bold ph-paper-plane-right"></i>} GỬI ADMIN DUYỆT TIN
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {myJobs.length === 0 && !showForm ? (
+                  <div className="col-span-full py-10 text-center text-slate-400">Bạn chưa đăng tin tuyển dụng nào.</div>
+                ) : (
+                  myJobs.map(job => (
+                    <div key={job.id} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col hover:border-blue-300 transition-all">
+                      <div className="flex justify-between items-start mb-4">
+                        <span className={`text-[9px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest ${job.status === 'PENDING' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>{job.status}</span>
+                        <span className="text-[10px] font-bold text-slate-400">{new Date(job.created_at).toLocaleDateString('vi-VN')}</span>
+                      </div>
+                      <h4 className="text-lg font-black text-slate-900 mb-2">{job.title}</h4>
+                      <p className="text-sm text-slate-500 line-clamp-2 mb-6">{job.requirements}</p>
+                      <div className="mt-auto pt-4 border-t border-slate-100 flex justify-between items-center">
+                         <div><p className="text-[10px] font-bold text-slate-400 uppercase">Lương</p><p className="text-sm font-black text-emerald-600">{job.salary_range || 'Thỏa thuận'}</p></div>
+                         <button className="text-xs font-black text-blue-600 hover:underline uppercase tracking-widest">Xem 0 Ứng viên <i className="ph-bold ph-caret-right"></i></button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          ) : (
+            /* NẾU KHÔNG CÓ QUYỀN -> HIỆN BANNER KHÓA ĐÒI NÂNG CẤP */
+            <div className="bg-gradient-to-br from-amber-50 to-white border border-amber-200 rounded-[3rem] p-12 md:p-20 text-center flex flex-col items-center shadow-lg relative overflow-hidden group">
+              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+              
+              <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-8 shadow-xl border border-amber-100 relative z-10 group-hover:scale-110 transition-transform duration-500">
+                <i className="ph-fill ph-lock-key text-5xl text-amber-500"></i>
+              </div>
+              
+              <h3 className="text-2xl md:text-3xl font-black text-slate-900 relative z-10 mb-4">Tính năng Đăng Tuyển Dụng bị khóa</h3>
+              <p className="text-base text-slate-600 max-w-lg leading-relaxed relative z-10 mb-8">
+                Bạn đang sử dụng gói hội viên <strong className="text-slate-900">{currentUser.tier_code}</strong>. <br/>Vui lòng nâng cấp hạng thẻ để mở khóa tính năng Đăng tin tuyển dụng và tìm kiếm nhân sự cấp cao.
+              </p>
+              
+              <button className="px-10 py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-2xl font-black shadow-lg hover:shadow-amber-500/30 hover:-translate-y-1 transition-all relative z-10 flex items-center gap-2">
+                XEM QUYỀN LỢI THẺ CAO CẤP <i className="ph-bold ph-arrow-right"></i>
+              </button>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {myJobs.map(job => (
-              <div key={job.id} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col hover:border-blue-300 transition-all">
-                <div className="flex justify-between items-start mb-4">
-                  <span className={`text-[9px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest ${job.status === 'PENDING' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>{job.status}</span>
-                  <span className="text-[10px] font-bold text-slate-400">{new Date(job.created_at).toLocaleDateString('vi-VN')}</span>
-                </div>
-                <h4 className="text-lg font-black text-slate-900 mb-2">{job.title}</h4>
-                <p className="text-sm text-slate-500 line-clamp-2 mb-6">{job.requirements}</p>
-                <div className="mt-auto pt-4 border-t border-slate-100 flex justify-between items-center">
-                   <div><p className="text-[10px] font-bold text-slate-400 uppercase">Lương</p><p className="text-sm font-black text-emerald-600">{job.salary_range || 'Thỏa thuận'}</p></div>
-                   <button className="text-xs font-black text-blue-600 hover:underline uppercase tracking-widest">Xem 0 Ứng viên <i className="ph-bold ph-caret-right"></i></button>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>
