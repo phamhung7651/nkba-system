@@ -3,21 +3,36 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 
+// DANH SÁCH TÍNH NĂNG CỦA PORTAL HỘI VIÊN
+const PORTAL_FEATURES = [
+  { code: 'VIEW_MARKET_BUDGET', name: 'Xem Ngân sách Dự án Biz-Link', icon: 'ph-wallet' },
+  { code: 'VIEW_MARKET_CONTACT', name: 'Xem Liên hệ Chủ thầu Biz-Link', icon: 'ph-phone-call' },
+  { code: 'POST_PROJECT', name: 'Đăng Dự án lên Biz-Link', icon: 'ph-upload-simple' },
+  { code: 'VIEW_TALENT_CONTACT', name: 'Xem Liên hệ Ứng viên J-Job', icon: 'ph-identification-card' },
+  { code: 'POST_JOB', name: 'Đăng tin Tuyển dụng J-Job', icon: 'ph-briefcase' },
+  { code: 'REQUEST_CUSTOM_DATA', name: 'Đặt hàng Dữ liệu Insights', icon: 'ph-chart-pie' }
+];
+
 export default function TiersConfigPage() {
   const supabase = createClient();
-  const [activeTab, setActiveTab] = useState<'individual' | 'corporate'>('individual');
+  // Đã thêm tab 'permissions'
+  const [activeTab, setActiveTab] = useState<'individual' | 'corporate' | 'permissions'>('individual');
   const [isLoading, setIsLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   // Data States
   const [indTiers, setIndTiers] = useState<any[]>([]);
   const [corpTiers, setCorpTiers] = useState<any[]>([]);
+  
+  // Ma trận Đặc quyền (Feature Flags)
+  const [tierMatrix, setTierMatrix] = useState<Record<string, Record<string, boolean>>>({});
 
   // Form States cho Gói Cá nhân
   const [newIndTier, setNewIndTier] = useState({
     code: '', name: '', annual_fee: 0
   });
 
-  // Form States cho Gói Doanh nghiệp (Có Quota)
+  // Form States cho Gói Doanh nghiệp
   const [newCorpTier, setNewCorpTier] = useState({
     code: '', name: '', annual_fee: 0,
     quota_silver: 0, quota_gold: 0, quota_titanium: 0
@@ -25,12 +40,34 @@ export default function TiersConfigPage() {
 
   const fetchData = async () => {
     setIsLoading(true);
-    const [indRes, corpRes] = await Promise.all([
+    const [indRes, corpRes, tierFeatRes] = await Promise.all([
       supabase.from('individual_tiers').select('*').order('annual_fee', { ascending: true }),
-      supabase.from('corporate_tiers').select('*').order('annual_fee', { ascending: true })
+      supabase.from('corporate_tiers').select('*').order('annual_fee', { ascending: true }),
+      supabase.from('tier_features').select('*') // Bảng cấu hình tính năng hội viên
     ]);
-    if (indRes.data) setIndTiers(indRes.data);
+
+    const fetchedIndTiers = indRes.data || [];
+    setIndTiers(fetchedIndTiers);
     if (corpRes.data) setCorpTiers(corpRes.data);
+
+    // XÂY DỰNG MA TRẬN ĐẶC QUYỀN BAN ĐẦU
+    const initialTierMatrix: Record<string, Record<string, boolean>> = {};
+    fetchedIndTiers.forEach(t => {
+      initialTierMatrix[t.code] = {};
+      PORTAL_FEATURES.forEach(f => {
+        initialTierMatrix[t.code][f.code] = t.code === 'VIP'; // VIP auto bật
+      });
+    });
+
+    if (tierFeatRes.data) {
+      tierFeatRes.data.forEach(tf => {
+        if (initialTierMatrix[tf.tier_code] && tf.feature_code in initialTierMatrix[tf.tier_code]) {
+          if (tf.tier_code !== 'VIP') initialTierMatrix[tf.tier_code][tf.feature_code] = tf.can_access;
+        }
+      });
+    }
+    setTierMatrix(initialTierMatrix);
+
     setIsLoading(false);
   };
 
@@ -68,28 +105,61 @@ export default function TiersConfigPage() {
     }
   };
 
+  // LOGIC LƯU ĐẶC QUYỀN
+  const toggleTierFeature = (tierCode: string, featureCode: string) => {
+    if (tierCode === 'VIP') return alert("Hạng VIP mặc định mở khóa mọi tính năng!");
+    setTierMatrix(prev => ({ ...prev, [tierCode]: { ...prev[tierCode], [featureCode]: !prev[tierCode][featureCode] } }));
+  };
+
+  const saveTierMatrix = async () => {
+    setSaving(true);
+    const payload: any[] = [];
+    indTiers.forEach(t => {
+      PORTAL_FEATURES.forEach(f => { payload.push({ tier_code: t.code, feature_code: f.code, can_access: tierMatrix[t.code][f.code] }); });
+    });
+    const { error } = await supabase.from('tier_features').upsert(payload, { onConflict: 'tier_code, feature_code' });
+    if (error) alert("Lỗi khi lưu: " + error.message);
+    else alert("✅ Lưu Đặc quyền Hội viên thành công!");
+    setSaving(false);
+  };
+
+
   if (isLoading) return <div className="p-20 text-center animate-pulse font-bold text-slate-400">ĐANG TẢI CẤU HÌNH GÓI CƯỚC...</div>;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-20">
       
       {/* HEADER TỔNG */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="absolute top-0 left-0 w-1 h-full bg-[#002D62]"></div>
-        <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Cấu hình Gói cước (Tiers)</h2>
-        <p className="text-slate-500 text-sm mt-1 font-medium">Định nghĩa giá trị gói hội viên cá nhân và hạn mức (Quota) cho Pháp nhân.</p>
-        
-        <div className="flex gap-2 mt-6 p-1 bg-slate-100 rounded-xl w-fit">
-          <button onClick={() => setActiveTab('individual')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'individual' ? 'bg-white text-[#002D62] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-            <i className="ph-fill ph-user mr-2"></i> Gói Cá nhân
-          </button>
-          <button onClick={() => setActiveTab('corporate')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'corporate' ? 'bg-[#002D62] text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}>
-            <i className="ph-fill ph-buildings mr-2"></i> Gói Doanh nghiệp & Quota
-          </button>
+        <div>
+          <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Cấu hình Gói cước (Tiers)</h2>
+          <p className="text-slate-500 text-sm mt-1 font-medium">Định nghĩa giá trị gói hội viên, hạn mức Quota và Đặc quyền sử dụng Portal.</p>
         </div>
+
+        {/* Nút lưu xuất hiện khi ở Tab Đặc quyền */}
+        {activeTab === 'permissions' && (
+          <button onClick={saveTierMatrix} disabled={saving} className="px-8 py-3 bg-amber-500 text-[#002D62] text-sm font-black rounded-xl shadow-md disabled:bg-slate-400 hover:bg-amber-400 transition-colors">
+            {saving ? 'ĐANG LƯU...' : 'LƯU ĐẶC QUYỀN'}
+          </button>
+        )}
       </div>
 
-      {/* TAB 1: GÓI CÁ NHÂN */}
+      {/* ĐIỀU HƯỚNG TABS */}
+      <div className="flex flex-wrap gap-2 p-1 bg-white border border-slate-200 shadow-sm rounded-xl w-fit">
+        <button onClick={() => setActiveTab('individual')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'individual' ? 'bg-[#002D62] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          <i className="ph-fill ph-user mr-2"></i> Gói Cá nhân
+        </button>
+        <button onClick={() => setActiveTab('corporate')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'corporate' ? 'bg-[#002D62] text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}>
+          <i className="ph-fill ph-buildings mr-2"></i> Gói Doanh nghiệp & Quota
+        </button>
+        {/* THÊM TAB MỚI */}
+        <button onClick={() => setActiveTab('permissions')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'permissions' ? 'bg-amber-400 text-amber-900 shadow-md' : 'text-slate-500 hover:text-amber-600'}`}>
+          <i className="ph-fill ph-crown mr-2"></i> Đặc quyền Portal (Feature Flags)
+        </button>
+      </div>
+
+      {/* TAB 1: GÓI CÁ NHÂN (GIỮ NGUYÊN CỦA BẠN) */}
       {activeTab === 'individual' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           {/* Form thêm mới Cá nhân */}
@@ -138,7 +208,7 @@ export default function TiersConfigPage() {
         </div>
       )}
 
-      {/* TAB 2: GÓI DOANH NGHIỆP & QUOTA */}
+      {/* TAB 2: GÓI DOANH NGHIỆP & QUOTA (GIỮ NGUYÊN CỦA BẠN) */}
       {activeTab === 'corporate' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           {/* Form thêm mới Doanh nghiệp */}
@@ -219,6 +289,54 @@ export default function TiersConfigPage() {
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {/* TAB 3: ĐẶC QUYỀN PORTAL (MỚI THÊM VÀO ĐÂY) */}
+      {activeTab === 'permissions' && (
+        <div className="bg-gradient-to-br from-amber-50 to-white rounded-2xl border border-amber-200 shadow-sm overflow-x-auto animate-in slide-in-from-bottom-4">
+          <div className="p-6 border-b border-amber-100 bg-amber-100/50">
+            <h3 className="font-black text-amber-900 text-lg">Ma trận Đặc quyền (Feature Flags)</h3>
+            <p className="text-sm text-amber-700 mt-1 font-medium">Bật/tắt các tính năng "mồi câu" và cao cấp hiển thị trên Member Portal cho từng hạng thẻ Cá nhân.</p>
+          </div>
+          <table className="w-full text-left border-collapse min-w-[900px]">
+            <thead>
+              <tr>
+                <th className="p-5 border-b border-amber-100 sticky left-0 z-10 w-[300px] font-black text-amber-700 uppercase text-xs tracking-widest bg-white">Tính năng trên Portal</th>
+                {indTiers.map(t => (
+                  <th key={t.code} className="p-4 border-b border-l border-amber-100 bg-white text-center min-w-[140px]">
+                    <div className={`inline-block px-3 py-1.5 rounded-lg border text-[11px] font-black uppercase tracking-wider ${t.code === 'VIP' ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                      {t.name} {t.code === 'VIP' && '👑'}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-amber-50">
+              {PORTAL_FEATURES.map(feat => (
+                <tr key={feat.code} className="hover:bg-white transition-colors">
+                  <td className="p-4 border-r border-amber-50 sticky left-0 z-10 bg-amber-50/20">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600"><i className={`ph-fill ${feat.icon} text-xl`}></i></div>
+                      <div><div className="font-bold text-slate-800 text-sm">{feat.name}</div><div className="text-[9px] text-amber-600 font-bold tracking-widest uppercase mt-1">{feat.code}</div></div>
+                    </div>
+                  </td>
+                  {indTiers.map(tier => {
+                    const hasAccess = tierMatrix[tier.code]?.[feat.code] || false;
+                    const isVIP = tier.code === 'VIP';
+                    return (
+                      <td key={`${tier.code}-${feat.code}`} className="p-4 text-center border-l border-amber-50 bg-amber-50/10">
+                        <label className={`inline-flex w-8 h-8 cursor-pointer ${isVIP ? 'opacity-40 cursor-not-allowed' : 'hover:scale-110 transition-transform'}`}>
+                          <input type="checkbox" className="peer sr-only" checked={hasAccess} onChange={() => toggleTierFeature(tier.code, feat.code)} disabled={isVIP} />
+                          <div className={`w-6 h-6 m-auto rounded-md border-2 flex items-center justify-center transition-all ${hasAccess ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-amber-200 text-transparent'}`}><i className="ph-bold ph-check text-sm"></i></div>
+                        </label>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
