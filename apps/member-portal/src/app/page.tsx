@@ -27,6 +27,7 @@ export default function MemberDashboard() {
 
       // ==========================================
       // PHÂN LUỒNG 1: TÌM TRONG BẢNG HỘI VIÊN TRƯỚC
+      // (Sử dụng user_auth_id để đối chiếu)
       // ==========================================
       const { data: memberData, error: memberError } = await supabase
         .from('individuals')
@@ -34,10 +35,10 @@ export default function MemberDashboard() {
           full_name,
           email,
           status,
-          individual_tiers(name, code),
+          individual_tiers!individuals_tier_id_fkey(name, code),
           corporates(name, tax_code)
         `)
-        .eq('user_auth_id', user.id)
+        .eq('user_auth_id', user.id) // <--- ĐIỂM MẤU CHỐT LÀ ĐÂY!
         .maybeSingle();
 
       if (memberError) {
@@ -56,16 +57,17 @@ export default function MemberDashboard() {
         setMemberInfo({ ...memberData, is_admin: false });
       } 
       // ==========================================
-      // PHÂN LUỒNG 2: TÌM TRONG NHÂN VIÊN (ADMIN)
+      // PHÂN LUỒNG 2: NẾU KHÔNG PHẢI HỘI VIÊN, TÌM TRONG NHÂN VIÊN (ADMIN)
       // ==========================================
       else {
         const { data: empData, error: empError } = await supabase
           .from('employees')
           .select('name, role, email')
-          .eq('email', user.email) 
+          .eq('email', user.email) // Hoặc eq('auth_id', user.id) tùy DB của bạn
           .maybeSingle();
 
         if (empData) {
+          // CẤP QUYỀN TRUY CẬP TỐI CAO ĐỂ ADMIN VÀO PORTAL
           setMemberInfo({
             full_name: empData.name,
             email: user.email,
@@ -188,7 +190,7 @@ export default function MemberDashboard() {
               {memberInfo.is_admin ? 'Phân quyền' : 'Hệ thẻ'}
             </p>
             <p className={`text-xl font-black tracking-tight ${memberInfo.is_admin ? 'text-rose-600' : 'text-[#002D62]'}`}>
-              {memberInfo.individual_tiers?.name}
+              {Array.isArray(memberInfo.individual_tiers) ? memberInfo.individual_tiers[0]?.name : memberInfo.individual_tiers?.name}
             </p>
           </div>
         </div>

@@ -30,12 +30,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         return;
       }
 
+      // ==========================================
       // TÌM TRONG BẢNG HỘI VIÊN BẰNG USER_AUTH_ID
+      // (Đã thêm !individuals_tier_id_fkey để fix lỗi xung đột khóa ngoại)
+      // ==========================================
       const { data: profile } = await supabase
         .from('individuals')
         .select(`
           id, full_name, status,
-          individual_tiers(name, code)
+          individual_tiers!individuals_tier_id_fkey(name, code)
         `)
         .eq('user_auth_id', user.id)
         .maybeSingle();
@@ -63,7 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         }
       } 
       else {
-        // TÌM TRONG NHÂN VIÊN
+        // TÌM TRONG NHÂN VIÊN (DÀNH CHO ADMIN)
         const { data: empData } = await supabase
           .from('employees')
           .select('name, role')
