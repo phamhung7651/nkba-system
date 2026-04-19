@@ -19,219 +19,251 @@ export default function MemberDashboard() {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       
       if (authError || !user) {
-        // KHÔNG ĐUỔI KHÁCH NỮA - HIỆN LỖI LÊN MÀN HÌNH
         setMemberInfo({ error: "Không tìm thấy phiên đăng nhập. Vui lòng đăng nhập lại!" });
-        setLoading(false);
-        return;
+        setLoading(false); return;
       }
 
       // ==========================================
-      // PHÂN LUỒNG 1: TÌM TRONG BẢNG HỘI VIÊN TRƯỚC
-      // (Sử dụng user_auth_id để đối chiếu)
+      // PHÂN LUỒNG 1: TÌM TRONG BẢNG HỘI VIÊN
       // ==========================================
       const { data: memberData, error: memberError } = await supabase
         .from('individuals')
         .select(`
-          full_name,
-          email,
-          status,
+          full_name, email, status,
           individual_tiers!individuals_tier_id_fkey(name, code),
           corporates(name, tax_code)
         `)
-        .eq('user_auth_id', user.id) // <--- ĐIỂM MẤU CHỐT LÀ ĐÂY!
-        .maybeSingle();
+        .eq('user_auth_id', user.id).maybeSingle();
 
       if (memberError) {
-        setMemberInfo({ error: `LỖI DATABASE: ${memberError.message}` });
-        setLoading(false);
-        return;
+        setMemberInfo({ error: `LỖI DATABASE: ${memberError.message}` }); setLoading(false); return;
       }
 
       if (memberData) {
-        // KHÔNG ĐUỔI KHÁCH NỮA - HIỆN BẢNG VÀNG CHỜ DUYỆT
         if (memberData.status !== 'ACTIVE') {
-          setMemberInfo({ is_pending: true, ...memberData });
-          setLoading(false);
-          return;
+          setMemberInfo({ is_pending: true, ...memberData }); setLoading(false); return;
         }
-        setMemberInfo({ ...memberData, is_admin: false });
+        
+        // Trích xuất mã Tier để làm logic phân quyền hiển thị (Làm mờ thông tin)
+        const tierCode = Array.isArray(memberData.individual_tiers) 
+          ? memberData.individual_tiers[0]?.code 
+          : (memberData.individual_tiers as any)?.code;
+          
+        setMemberInfo({ ...memberData, is_admin: false, tier_code: tierCode });
       } 
       // ==========================================
-      // PHÂN LUỒNG 2: NẾU KHÔNG PHẢI HỘI VIÊN, TÌM TRONG NHÂN VIÊN (ADMIN)
+      // PHÂN LUỒNG 2: TÌM TRONG NHÂN VIÊN (ADMIN)
       // ==========================================
       else {
-        const { data: empData, error: empError } = await supabase
-          .from('employees')
-          .select('name, role, email')
-          .eq('email', user.email) // Hoặc eq('auth_id', user.id) tùy DB của bạn
-          .maybeSingle();
-
+        const { data: empData } = await supabase.from('employees').select('name, role, email').eq('email', user.email).maybeSingle();
         if (empData) {
-          // CẤP QUYỀN TRUY CẬP TỐI CAO ĐỂ ADMIN VÀO PORTAL
           setMemberInfo({
-            full_name: empData.name,
-            email: user.email,
-            status: 'ACTIVE',
-            is_admin: true,
-            role: empData.role,
+            full_name: empData.name, email: user.email, status: 'ACTIVE', is_admin: true, role: empData.role, tier_code: 'VIP',
             individual_tiers: { name: 'Quyền Truy cập Tối cao' },
             corporates: { name: 'Ban Điều Hành NKBA' }
           });
         } else {
-          // BẮT TẠI TRẬN: TÀI KHOẢN MA
           setMemberInfo({ error: `Tài khoản ma! Không tìm thấy Hồ sơ nào khớp với thẻ Auth ID: ${user.id}` });
         }
       }
-      
       setLoading(false);
     };
-
     fetchMemberData();
   }, [supabase, router]);
 
-  // ==========================================
-  // GIAO DIỆN XỬ LÝ LỖI (SẼ HIỆN RA THAY VÌ ĐÁ VĂNG)
-  // ==========================================
-  
-  if (loading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-4">
-          <i className="ph-bold ph-spinner animate-spin text-4xl text-[#002D62]"></i>
-          <p className="text-slate-500 font-bold tracking-widest uppercase text-sm">Đang xác thực đặc quyền...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 🔴 MÀN HÌNH BÁO LỖI (TÀI KHOẢN MA HOẶC LỖI DB)
-  if (memberInfo?.error) {
-    return (
-      <div className="flex h-[80vh] w-full items-center justify-center p-6">
-        <div className="bg-white p-8 rounded-2xl shadow-xl border-l-4 border-rose-500 max-w-lg">
-          <h2 className="text-xl font-black text-rose-600 mb-2"><i className="ph-fill ph-warning-circle"></i> TRUY CẬP BỊ TỪ CHỐI</h2>
-          <p className="text-slate-600 font-medium mb-6 leading-relaxed">{memberInfo.error}</p>
-          <button onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }} className="px-6 py-2.5 bg-slate-900 text-white font-bold rounded-lg hover:bg-black transition-colors w-full">Đăng xuất & Thử lại</button>
-        </div>
-      </div>
-    );
-  }
-
-  // 🟡 MÀN HÌNH BÁO CHỜ DUYỆT (NẾU ĐĂNG KÝ GÓI CÓ PHÍ)
-  if (memberInfo?.is_pending) {
-    return (
-      <div className="flex h-[80vh] w-full items-center justify-center p-6">
-        <div className="bg-white p-8 rounded-3xl shadow-xl border-t-4 border-amber-500 max-w-lg text-center animate-in zoom-in-95">
-          <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
-            <i className="ph-fill ph-hourglass-high text-4xl animate-pulse"></i>
-          </div>
-          <h2 className="text-2xl font-black text-slate-800 mb-3">Hồ sơ đang chờ duyệt</h2>
-          <p className="text-slate-600 font-medium text-sm leading-relaxed mb-8">
-            Xin chào <strong className="text-amber-600">{memberInfo.full_name}</strong>, tài khoản của bạn đang ở trạng thái <strong>CHỜ XÁC THỰC</strong>. Vui lòng hoàn tất thanh toán hoặc chờ Ban Thư Ký NKBA kiểm duyệt để kích hoạt thẻ.
-          </p>
-          <button onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }} className="px-6 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors w-full border border-slate-200">Đăng xuất</button>
-        </div>
-      </div>
-    );
-  }
 
   // ==========================================
-  // GIAO DIỆN CHÍNH (KHI MỌI THỨ ACTIVE)
+  // XỬ LÝ GIAO DIỆN LỖI & LOADING 
   // ==========================================
+  if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50"><i className="ph-bold ph-spinner animate-spin text-4xl text-[#002D62]"></i></div>;
+  if (memberInfo?.error) return <div className="flex h-[80vh] items-center justify-center p-6"><div className="bg-white p-8 rounded-2xl shadow-xl border-l-4 border-rose-500"><p className="text-rose-600 font-black">{memberInfo.error}</p><button onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }} className="mt-4 px-6 py-2 bg-slate-900 text-white font-bold rounded-lg w-full">Đăng xuất</button></div></div>;
+  if (memberInfo?.is_pending) return <div className="flex h-[80vh] items-center justify-center p-6"><div className="bg-white p-8 rounded-2xl shadow-xl border-t-4 border-amber-500 text-center"><p className="text-amber-600 font-black">Hồ sơ đang chờ duyệt!</p><button onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }} className="mt-4 px-6 py-2 bg-slate-100 font-bold rounded-lg w-full">Đăng xuất</button></div></div>;
 
-  const stats = [
-    { label: 'Dự án đang kết nối', value: '03', icon: 'ph-fill ph-handshake', color: 'text-blue-600' },
-    { label: 'Lượt xem hồ sơ DN', value: '128', icon: 'ph-fill ph-eye', color: 'text-emerald-600' },
-    { label: 'Tin tuyển dụng Active', value: '01', icon: 'ph-fill ph-briefcase', color: 'text-amber-600' },
+  // ==========================================
+  // LOGIC HIỆU ỨNG FOMO: Chỉ cho VIP/GOLD/TITANIUM xem, thẻ khác bị làm mờ
+  // ==========================================
+  const isPremium = memberInfo?.is_admin || ['GOLD', 'TITANIUM', 'VIP'].includes(memberInfo?.tier_code);
+
+  // ==========================================
+  // DỮ LIỆU TÓM TẮT ĐỂ HIỂN THỊ LÊN DASHBOARD (MOCK DATA TẠM THỜI)
+  // ==========================================
+  const mockProjects = [
+    { id: 1, title: 'Thi công MEP Nhà máy Điện tử Koha', budget: '12 Tỷ VNĐ', location: 'Bắc Ninh', contact: 'Mr. Tanaka (098xxxxxxx)' },
+    { id: 2, title: 'Tìm thầu phụ Xưởng cơ khí GĐ2', budget: '5 Tỷ VNĐ', location: 'Đồng Nai', contact: 'Ms. Haruno (090xxxxxxx)' },
   ];
 
-  const features = [
-    { title: 'Sàn Biz-Link', desc: 'Tìm kiếm đối tác & Cơ hội thầu', icon: 'ph ph-buildings', href: '/biz-link', tierRequired: 'GOLD' },
-    { title: 'Tuyển dụng J-Job', desc: 'Đăng tin & Tuyển dụng nhân sự Nhật', icon: 'ph ph-user-list', href: '/talent-hub', tierRequired: 'TITANIUM' },
-    { title: 'Insights VIP', desc: 'Báo cáo thị trường độc quyền', icon: 'ph ph-chart-line-up', href: '/insights', tierRequired: 'TITANIUM' },
+  const mockJobs = [
+    { id: 1, title: 'Kỹ sư Cầu nối (BrSE) Xây dựng', company: 'Shimizu Corp Vietnam', salary: '$1,500 - $2,500' },
+    { id: 2, title: 'Phiên dịch viên Tiếng Nhật (N2)', company: 'Toda Corporation', salary: 'Lên đến 35 Triệu' },
+  ];
+
+  const mockNews = [
+    { id: 1, title: 'Xu hướng vốn FDI Nhật Bản vào BĐS Công nghiệp VN Q3/2026', type: 'Độc quyền' },
+    { id: 2, title: 'Thay đổi quy định cấp phép xây dựng cho CĐT nước ngoài', type: 'Pháp lý' },
   ];
 
   return (
-    <div className="p-6 md:p-10 space-y-10 animate-in fade-in duration-500 max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto bg-slate-50/50 min-h-screen">
       
-      {/* KHUNG CHÀO ĐÓN */}
-      <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
-        
-        {memberInfo.is_admin && (
-          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-rose-500/10 rounded-full blur-3xl -translate-y-1/4 translate-x-1/4 pointer-events-none"></div>
-        )}
-
-        <div className="relative z-10">
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-            Konnichiwa, {memberInfo.full_name}! 👋
-          </h1>
-          <p className="text-slate-600 mt-2 max-w-lg">
-            Chào mừng Đại diện của <strong className={memberInfo.is_admin ? "text-rose-600" : "text-[#002D62]"}>{memberInfo.corporates?.name || 'Thành viên Độc lập'}</strong> đến với NKBA Portal. 
-          </p>
-          
-          {memberInfo.is_admin && (
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <span className="text-xs font-bold text-rose-600 uppercase tracking-widest bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-100">
-                <i className="ph-fill ph-shield-check mr-1"></i> Chế độ Quản trị viên
-              </span>
-              <a href="http://localhost:3002" className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white hover:bg-black rounded-lg font-bold text-sm transition-colors shadow-md">
-                Về lại Admin Workspace <i className="ph-bold ph-arrow-square-out"></i>
+      {/* 1. KHU VỰC HEADER TỔNG QUAN */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
+          <div className="relative z-10">
+            <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1">
+              {new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </p>
+            <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+              Konnichiwa, {memberInfo.full_name}! 👋
+            </h1>
+            <p className="text-slate-600 mt-2">
+              Chào mừng Đại diện của <strong className="text-[#002D62]">{memberInfo.corporates?.name || 'Thành viên Độc lập'}</strong>.
+            </p>
+            {memberInfo.is_admin && (
+              <a href="http://localhost:3002" className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-rose-50 text-rose-600 border border-rose-200 rounded-lg font-bold text-xs transition-colors">
+                <i className="ph-bold ph-shield-check"></i> Chế độ Quản trị viên
               </a>
-            </div>
-          )}
-        </div>
-
-        <div className={`flex items-center gap-4 p-4 rounded-2xl border relative z-10 bg-white shadow-sm ${memberInfo.is_admin ? 'border-rose-100' : 'border-[#D4AF37]/20'}`}>
-          <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-white text-3xl shadow-inner ${memberInfo.is_admin ? 'bg-gradient-to-br from-rose-500 to-red-600' : 'bg-gradient-to-br from-[#D4AF37] to-yellow-600'}`}>
-            <i className={memberInfo.is_admin ? "ph-fill ph-fingerprint" : "ph-fill ph-crown"}></i>
+            )}
           </div>
-          <div>
-            <p className={`text-[10px] font-black uppercase tracking-widest ${memberInfo.is_admin ? 'text-rose-400' : 'text-yellow-600'}`}>
-              {memberInfo.is_admin ? 'Phân quyền' : 'Hệ thẻ'}
-            </p>
-            <p className={`text-xl font-black tracking-tight ${memberInfo.is_admin ? 'text-rose-600' : 'text-[#002D62]'}`}>
-              {Array.isArray(memberInfo.individual_tiers) ? memberInfo.individual_tiers[0]?.name : memberInfo.individual_tiers?.name}
-            </p>
+          <div className="absolute -right-10 -bottom-10 opacity-5 pointer-events-none">
+            <i className="ph-fill ph-buildings text-[250px]"></i>
           </div>
         </div>
-      </div>
 
-      {/* CHỈ SỐ THỐNG KÊ NHANH */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {stats.map((stat, index) => (
-          <div key={index} className="bg-white p-6 rounded-2xl border border-slate-200 flex items-center gap-5 shadow-sm">
-            <div className={`w-14 h-14 rounded-full ${stat.color} bg-slate-50 flex items-center justify-center text-2xl`}>
-              <i className={stat.icon}></i>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-              <p className="text-3xl font-black text-slate-900 tracking-tight">{stat.value}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* KHU VỰC TÍNH NĂNG CHÍNH */}
-      <div>
-        <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
-          <i className="ph-bold ph-lightning text-[#002D62]"></i> Công cụ kết nối thực chiến
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {features.map((feat, index) => (
-            <Link href={feat.href} key={index} className="bg-white p-8 rounded-2xl border border-slate-200 group hover:border-blue-300 hover:shadow-xl hover:shadow-blue-900/5 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between aspect-square md:aspect-auto">
-              <div className="space-y-4">
-                <i className={`${feat.icon} text-4xl text-[#002D62]`}></i>
-                <h3 className="text-xl font-black text-slate-900 tracking-tight group-hover:text-blue-700">{feat.title}</h3>
-                <p className="text-sm text-slate-500 font-medium leading-relaxed">{feat.desc}</p>
+        {/* TIẾN TRÌNH HỒ SƠ (GAMIFICATION) */}
+        <div className="bg-[#002D62] text-white p-6 md:p-8 rounded-3xl shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-2xl"></div>
+          <div className="relative z-10">
+            <div className="flex justify-between items-end mb-4">
+              <div>
+                <p className="text-blue-200 text-xs font-bold uppercase tracking-widest mb-1">Độ tin cậy hồ sơ</p>
+                <h3 className="text-3xl font-black">45%</h3>
               </div>
-              <div className="text-blue-600 font-bold text-sm mt-6 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                Truy cập ngay <i className="ph-bold ph-arrow-right"></i>
+              <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm border border-white/20 text-amber-400 text-2xl">
+                <i className="ph-fill ph-medal"></i>
               </div>
+            </div>
+            
+            <div className="w-full bg-slate-900/50 rounded-full h-3 mb-4 overflow-hidden border border-white/10">
+              <div className="bg-gradient-to-r from-blue-400 to-emerald-400 h-3 rounded-full relative" style={{ width: '45%' }}></div>
+            </div>
+            
+            <p className="text-sm text-blue-100/80 mb-4">Nâng cấp hồ sơ lên 80% để nhận huy hiệu <strong>Verified Trust</strong> từ NKBA.</p>
+            <Link href="/profile" className="block text-center w-full py-3 bg-white text-[#002D62] font-black rounded-xl text-sm hover:bg-slate-100 transition-colors shadow-lg">
+              Bổ sung Hồ sơ ngay
             </Link>
-          ))}
+          </div>
         </div>
       </div>
 
+      {/* 2. KHU VỰC FEED (MỒI CÂU) - KẾT NỐI VỚI CÁC TRANG CHUYÊN SÂU */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* CỘT TRÁI (CHỨA BIZ-LINK & J-JOB) */}
+        <div className="lg:col-span-2 space-y-8">
+          
+          {/* TÓM TẮT SÀN BIZ-LINK */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2"><i className="ph-fill ph-handshake text-blue-600"></i> Cơ hội thầu Biz-Link</h2>
+              <Link href="/biz-link" className="text-sm font-bold text-blue-600 hover:underline">Vào Sàn Dự Án <i className="ph-bold ph-arrow-right"></i></Link>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {mockProjects.map(proj => (
+                <div key={proj.id} className="p-6 hover:bg-slate-50 transition-colors group">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-slate-800 text-lg group-hover:text-blue-600 transition-colors">{proj.title}</h3>
+                    <span className="px-3 py-1 bg-emerald-50 text-emerald-600 font-bold text-xs rounded-lg border border-emerald-100 shrink-0">Đang mở</span>
+                  </div>
+                  <div className="flex flex-wrap gap-4 text-sm mt-3">
+                    <div className="flex items-center gap-1.5 text-slate-500"><i className="ph-fill ph-map-pin text-slate-400"></i> {proj.location}</div>
+                    
+                    {/* FOMO BLUR EFFECT */}
+                    <div className="flex items-center gap-1.5 text-slate-500">
+                      <i className="ph-fill ph-wallet text-slate-400"></i> 
+                      {isPremium ? <span className="font-bold text-emerald-600">{proj.budget}</span> : <span className="blur-sm bg-slate-200 text-transparent select-none">10 Tỷ VNĐ</span>}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-500">
+                      <i className="ph-fill ph-phone text-slate-400"></i>
+                      {isPremium ? <span className="font-bold text-slate-700">{proj.contact}</span> : <span className="blur-[4px] bg-slate-200 text-transparent select-none">Mr. Tanaka (098xxx)</span>}
+                    </div>
+                  </div>
+
+                  {!isPremium && (
+                    <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-between">
+                      <p className="text-xs font-medium text-amber-800 flex items-center gap-2">
+                        <i className="ph-fill ph-lock-key text-amber-500 text-lg"></i> Nâng cấp thẻ để xem Ngân sách & Liên hệ.
+                      </p>
+                      <button className="px-4 py-2 bg-amber-500 text-white font-bold text-xs rounded-lg hover:bg-amber-600">Nâng cấp</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* TÓM TẮT TUYỂN DỤNG J-JOB */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2"><i className="ph-fill ph-briefcase text-blue-600"></i> Việc làm J-Job mới nhất</h2>
+              <Link href="/talent-hub" className="text-sm font-bold text-blue-600 hover:underline">Vào Talent Hub <i className="ph-bold ph-arrow-right"></i></Link>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {mockJobs.map(job => (
+                <div key={job.id} className="p-5 border border-slate-200 rounded-2xl hover:border-blue-400 hover:shadow-md transition-all cursor-pointer">
+                  <h3 className="font-bold text-slate-900 mb-1">{job.title}</h3>
+                  <p className="text-sm text-slate-500 mb-4">{job.company}</p>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg">{job.salary}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+
+        {/* CỘT PHẢI (CHỨA INSIGHTS & ĐỐI TÁC TIÊU BIỂU) */}
+        <div className="space-y-8">
+          
+          {/* TÓM TẮT INSIGHTS VIP */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/10 rounded-full blur-2xl"></div>
+            <h2 className="text-lg font-black text-slate-900 mb-5 flex items-center gap-2 relative z-10"><i className="ph-fill ph-chart-polar text-rose-500"></i> Insights VIP</h2>
+            <div className="space-y-4 relative z-10">
+              {mockNews.map(news => (
+                <div key={news.id} className="group/item cursor-pointer">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-rose-500 mb-1 block">{news.type}</span>
+                  <p className="text-sm font-bold text-slate-700 group-hover/item:text-rose-600 transition-colors line-clamp-2 leading-relaxed">{news.title}</p>
+                </div>
+              ))}
+            </div>
+            <Link href="/insights" className="block text-center w-full mt-6 py-2.5 border-2 border-slate-100 text-slate-600 font-bold rounded-xl text-sm hover:bg-slate-50 transition-colors relative z-10">
+              Vào Thư Viện Báo Cáo
+            </Link>
+          </div>
+
+          {/* MEMBER HUB MINI */}
+          <div className="bg-gradient-to-b from-slate-900 to-[#002D62] rounded-3xl shadow-xl p-6 text-white relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+            <h2 className="text-lg font-black mb-5 flex items-center gap-2 relative z-10"><i className="ph-fill ph-users-three text-blue-300"></i> Đối tác Tiêu biểu</h2>
+            <div className="space-y-3 relative z-10">
+              {/* Fake Data Logo */}
+              <div className="flex items-center gap-3 p-3 bg-white/10 rounded-xl backdrop-blur-sm border border-white/5">
+                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-900 font-black shadow-inner">T</div>
+                <div><p className="font-bold text-sm leading-tight">Toda Corporation</p><p className="text-[10px] font-black uppercase tracking-widest text-amber-400 mt-0.5">TITANIUM</p></div>
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-white/10 rounded-xl backdrop-blur-sm border border-white/5">
+                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-900 font-black shadow-inner">K</div>
+                <div><p className="font-bold text-sm leading-tight">Kajima Vietnam</p><p className="text-[10px] font-black uppercase tracking-widest text-amber-400 mt-0.5">GOLD</p></div>
+              </div>
+            </div>
+            <Link href="/directory" className="mt-5 flex items-center justify-center gap-2 text-sm font-bold text-blue-200 hover:text-white transition-colors relative z-10">
+              Khám phá Mạng lưới <i className="ph-bold ph-arrow-right"></i>
+            </Link>
+          </div>
+
+        </div>
+      </div>
     </div>
   );
 }

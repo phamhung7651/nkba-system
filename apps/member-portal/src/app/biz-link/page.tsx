@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
 
 export default function MemberBizLinkPage() {
+  const [supabase] = useState(() => createClient()); // Fix lỗi đa nhân cách
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'market' | 'my-projects'>('my-projects');
   
@@ -15,16 +16,32 @@ export default function MemberBizLinkPage() {
 
   useEffect(() => {
     const fetchUserAndProjects = async () => {
-      const { data: user } = await supabase.from('members').select('*').eq('status', 'ACTIVE').limit(1).single();
-      if (user) {
-        setCurrentUser(user);
-        // ĐÃ SỬA: Dùng member_id thay vì author_id
-        const { data: projs } = await supabase.from('projects').select('*').eq('member_id', user.id).order('created_at', { ascending: false });
+      // 1. Lấy mã Auth của người đang đăng nhập
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 2. Truy xuất đúng Profile thật từ bảng individuals
+      const { data: profile } = await supabase
+        .from('individuals')
+        .select('id, full_name, individual_tiers!individuals_tier_id_fkey(name, code)')
+        .eq('user_auth_id', user.id)
+        .single();
+
+      if (profile) {
+        setCurrentUser(profile);
+        
+        // 3. Lấy dự án khớp với ID thật của user
+        const { data: projs } = await supabase
+          .from('projects')
+          .select('*')
+          .eq('member_id', profile.id)
+          .order('created_at', { ascending: false });
+          
         if (projs) setMyProjects(projs);
       }
     };
     fetchUserAndProjects();
-  }, []);
+  }, [supabase]);
 
   const handleSubmitProject = async () => {
     if (!formData.title || !formData.budget_max) return alert('Vui lòng nhập Tên dự án và Ngân sách dự kiến!');
@@ -32,7 +49,7 @@ export default function MemberBizLinkPage() {
     
     setIsSubmitting(true);
     const payload = {
-      member_id: currentUser.id, // <-- ĐÃ SỬA CHỖ NÀY
+      member_id: currentUser.id, // Dùng đúng ID từ bảng individuals
       title: formData.title, 
       description: formData.description,
       category: formData.category, 
@@ -47,7 +64,7 @@ export default function MemberBizLinkPage() {
       alert('✅ Đăng dự án thành công! Đang chờ Admin Liên minh phê duyệt.');
       setShowForm(false);
       setFormData({ title: '', description: '', category: 'CONSTRUCTION', budget_max: '', location: '' });
-      // ĐÃ SỬA: Dùng member_id để fetch lại data
+      
       const { data } = await supabase.from('projects').select('*').eq('member_id', currentUser.id).order('created_at', { ascending: false });
       if (data) setMyProjects(data);
     }
@@ -56,7 +73,7 @@ export default function MemberBizLinkPage() {
 
   const formatMoney = (amount: number) => amount ? amount.toLocaleString('vi-VN') + ' VNĐ' : 'Thỏa thuận';
 
-  if (!currentUser) return <div className="p-20 text-center text-slate-400 font-bold animate-pulse">Đang tải...</div>;
+  if (!currentUser) return <div className="p-20 text-center text-slate-400 font-bold animate-pulse">Đang tải Sàn Giao Dịch...</div>;
 
   return (
     <div className="space-y-8 animate-in fade-in">

@@ -1,38 +1,48 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
 
 export default function MemberTalentHubPage() {
+  const [supabase] = useState(() => createClient()); // Fix lỗi đa nhân cách
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'talent-pool' | 'my-jobs'>('talent-pool');
   
   const [talents, setTalents] = useState<any[]>([]);
   const [myJobs, setMyJobs] = useState<any[]>([]);
   
-  // States cho Form đăng tin
   const [showForm, setShowForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [jobForm, setJobForm] = useState({ title: '', requirements: '', salary_range: '' });
 
   useEffect(() => {
     const fetchUserAndData = async () => {
-      // 1. Lấy User hiện tại
-      const { data: user } = await supabase.from('members').select('*').eq('status', 'ACTIVE').limit(1).single();
-      if (user) {
-        setCurrentUser(user);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('individuals')
+        .select('id, individual_tiers!individuals_tier_id_fkey(name, code)')
+        .eq('user_auth_id', user.id)
+        .single();
+
+      if (profile) {
+        // Trích xuất mã Tier (Ví dụ: 'PREMIUM', 'VIP') để dùng cho logic Upsell
+        const tierCode = Array.isArray(profile.individual_tiers) 
+          ? profile.individual_tiers[0]?.code 
+          : (profile.individual_tiers as any)?.code;
+
+        setCurrentUser({ ...profile, tier_code: tierCode });
         
-        // 2. Lấy danh sách Chuyên gia ĐÃ ĐƯỢC ADMIN DUYỆT (VERIFIED)
         const { data: tals } = await supabase.from('talents').select('*').eq('status', 'VERIFIED').order('created_at', { ascending: false });
         if (tals) setTalents(tals);
 
-        // 3. Lấy tin tuyển dụng CỦA CÔNG TY NÀY
-        const { data: jobs } = await supabase.from('jobs').select('*').eq('member_id', user.id).order('created_at', { ascending: false });
+        const { data: jobs } = await supabase.from('jobs').select('*').eq('member_id', profile.id).order('created_at', { ascending: false });
         if (jobs) setMyJobs(jobs);
       }
     };
     fetchUserAndData();
-  }, []);
+  }, [supabase]);
 
   const handleSubmitJob = async () => {
     if (!jobForm.title || !jobForm.requirements) return alert('Vui lòng nhập Tên vị trí và Yêu cầu!');
@@ -43,7 +53,7 @@ export default function MemberTalentHubPage() {
       title: jobForm.title,
       requirements: jobForm.requirements,
       salary_range: jobForm.salary_range,
-      status: 'PENDING' // Chờ Admin duyệt tin tuyển dụng
+      status: 'PENDING'
     };
 
     const { error } = await supabase.from('jobs').insert([payload]);
@@ -52,15 +62,13 @@ export default function MemberTalentHubPage() {
       alert('✅ Đã gửi Yêu cầu đăng tuyển! Tin sẽ hiển thị sau khi Admin duyệt.');
       setShowForm(false);
       setJobForm({ title: '', requirements: '', salary_range: '' });
-      // Reload danh sách jobs
       const { data } = await supabase.from('jobs').select('*').eq('member_id', currentUser.id).order('created_at', { ascending: false });
       if (data) setMyJobs(data);
     }
     setIsSubmitting(false);
   };
 
-  // Logic Upsell: Chỉ Premium và VIP mới được xem info liên hệ của Talents
-  const canViewContact = (tier: string) => tier === 'PREMIUM' || tier === 'VIP';
+  const canViewContact = (tierCode: string) => tierCode === 'PREMIUM' || tierCode === 'VIP' || tierCode === 'TITANIUM';
 
   if (!currentUser) return <div className="p-20 text-center text-slate-400 font-bold animate-pulse">Đang tải Trung tâm Nhân sự...</div>;
 
@@ -78,7 +86,6 @@ export default function MemberTalentHubPage() {
         </div>
       </div>
 
-      {/* TAB 1: TALENT POOL (SĂN ĐẦU NGƯỜI) */}
       {activeTab === 'talent-pool' && (
         <div className="space-y-6">
           <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-2xl flex items-center justify-between">
@@ -86,7 +93,7 @@ export default function MemberTalentHubPage() {
               <h3 className="text-indigo-900 font-black text-lg">Mạng lưới Nhân tài Tinh hoa</h3>
               <p className="text-indigo-700 text-sm mt-1">Các hồ sơ dưới đây đều đã được Admin NKBA kiểm chứng năng lực, phỏng vấn và cấp Tick Xanh.</p>
             </div>
-            {!canViewContact(currentUser.tier) && (
+            {!canViewContact(currentUser.tier_code) && (
               <div className="hidden md:flex items-center gap-2 bg-white px-4 py-2 rounded-xl text-rose-600 text-xs font-black shadow-sm border border-rose-100">
                 <i className="ph ph-lock-key text-base"></i> TÍNH NĂNG BỊ GIỚI HẠN
               </div>
@@ -97,10 +104,7 @@ export default function MemberTalentHubPage() {
             {talents.length === 0 ? <div className="col-span-full p-10 text-center text-slate-400 italic">Hiện chưa có chuyên gia nào trên sàn.</div> :
               talents.map(talent => (
                 <div key={talent.id} className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex flex-col hover:border-indigo-300 transition-all relative overflow-hidden">
-                  
-                  {/* Watermark Logo NKBA */}
                   <i className="ph ph-seal-check absolute top-4 right-4 text-5xl text-blue-50 opacity-50 pointer-events-none"></i>
-
                   <div className="flex items-center gap-4 mb-4 relative z-10">
                     <div className="w-14 h-14 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-lg font-black shadow-inner border border-slate-200 shrink-0">
                       {talent.full_name.charAt(0)}
@@ -121,8 +125,7 @@ export default function MemberTalentHubPage() {
                     </div>
                   </div>
 
-                  {/* LOGIC UPSELL Ở ĐÂY */}
-                  {canViewContact(currentUser.tier) ? (
+                  {canViewContact(currentUser.tier_code) ? (
                     <div className="mt-auto pt-4 border-t border-slate-100">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Thông tin liên hệ</p>
                       <p className="text-sm font-medium text-slate-800 flex items-center gap-2"><i className="ph ph-envelope-simple text-blue-500"></i> {talent.email || 'Chưa cập nhật'}</p>
@@ -142,7 +145,6 @@ export default function MemberTalentHubPage() {
         </div>
       )}
 
-      {/* TAB 2: QUẢN LÝ TIN TUYỂN DỤNG CỦA DOANH NGHIỆP */}
       {activeTab === 'my-jobs' && (
         <div className="space-y-6">
           <div className="flex justify-between items-center bg-blue-50 border border-blue-100 p-5 rounded-2xl shadow-inner">
@@ -192,7 +194,6 @@ export default function MemberTalentHubPage() {
           </div>
         </div>
       )}
-
     </div>
   );
 }

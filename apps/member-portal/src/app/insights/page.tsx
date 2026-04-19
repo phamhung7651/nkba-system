@@ -1,14 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import Link from 'next/link';
+import { createClient } from '@/utils/supabase/client';
 
 export default function MemberInsightsPage() {
+  const [supabase] = useState(() => createClient()); // Fix lỗi đa nhân cách
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'library' | 'requests'>('library');
   
-  // States
   const [reports, setReports] = useState<any[]>([]);
   const [myRequests, setMyRequests] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -17,22 +16,31 @@ export default function MemberInsightsPage() {
 
   useEffect(() => {
     const fetchUserAndData = async () => {
-      // 1. Giả lập lấy User hiện tại
-      const { data: user } = await supabase.from('members').select('*').eq('status', 'ACTIVE').limit(1).single();
-      if (user) {
-        setCurrentUser(user);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('individuals')
+        .select('id, individual_tiers!individuals_tier_id_fkey(name, code)')
+        .eq('user_auth_id', user.id)
+        .single();
+
+      if (profile) {
+        const tierCode = Array.isArray(profile.individual_tiers) 
+          ? profile.individual_tiers[0]?.code 
+          : (profile.individual_tiers as any)?.code;
+
+        setCurrentUser({ ...profile, tier_code: tierCode });
         
-        // 2. Tải toàn bộ Báo cáo đang Active
         const { data: reps } = await supabase.from('reports').select('*').eq('is_active', true).order('created_at', { ascending: false });
         if (reps) setReports(reps);
 
-        // 3. Tải các Yêu cầu dữ liệu CỦA RIÊNG USER NÀY
-        const { data: reqs } = await supabase.from('data_requests').select('*').eq('member_id', user.id).order('created_at', { ascending: false });
+        const { data: reqs } = await supabase.from('data_requests').select('*').eq('member_id', profile.id).order('created_at', { ascending: false });
         if (reqs) setMyRequests(reqs);
       }
     };
     fetchUserAndData();
-  }, []);
+  }, [supabase]);
 
   const handleSubmitRequest = async () => {
     if (!reqForm.title || !reqForm.content) return alert('Vui lòng nhập đủ thông tin yêu cầu!');
@@ -51,18 +59,16 @@ export default function MemberInsightsPage() {
       alert('✅ Yêu cầu đã được gửi đến Ban quản trị NKBA!');
       setShowForm(false);
       setReqForm({ title: '', content: '' });
-      // Reload lại danh sách requests
       const { data } = await supabase.from('data_requests').select('*').eq('member_id', currentUser.id).order('created_at', { ascending: false });
       if (data) setMyRequests(data);
     }
     setIsSubmitting(false);
   };
 
-  // Logic kiểm tra Quyền xem (Ai được xem báo cáo nào)
-  const canAccess = (reportTier: string, userTier: string) => {
-    const tiers = { 'PUBLIC': 1, 'STANDARD': 2, 'PREMIUM': 3, 'VIP': 4 };
+  const canAccess = (reportTier: string, userTierCode: string) => {
+    const tiers = { 'PUBLIC': 1, 'STANDARD': 2, 'PREMIUM': 3, 'TITANIUM': 4, 'VIP': 5 };
     const repLvl = tiers[reportTier as keyof typeof tiers] || 1;
-    const usrLvl = tiers[userTier as keyof typeof tiers] || 2;
+    const usrLvl = tiers[userTierCode as keyof typeof tiers] || 2;
     return usrLvl >= repLvl;
   };
 
@@ -87,11 +93,9 @@ export default function MemberInsightsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 pt-4">
           {reports.length === 0 ? <div className="col-span-full p-10 text-center text-slate-400 italic">Chưa có báo cáo nào được phát hành.</div> :
             reports.map(rep => {
-              const hasAccess = canAccess(rep.access_tier, currentUser.tier);
+              const hasAccess = canAccess(rep.access_tier, currentUser.tier_code);
               return (
                 <div key={rep.id} className="bg-white border border-slate-200 rounded-[2rem] flex flex-col overflow-hidden hover:shadow-lg transition-all group relative">
-                  
-                  {/* Nếu không có quyền -> Phủ lớp sương mờ (Upsell) */}
                   {!hasAccess && (
                     <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-6 text-center">
                       <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mb-3"><i className="ph ph-lock-key text-xl"></i></div>
@@ -103,8 +107,8 @@ export default function MemberInsightsPage() {
                   <div className={`h-40 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center relative ${!hasAccess ? 'grayscale opacity-50' : ''}`}>
                     <i className="ph ph-chart-polar text-6xl text-slate-300 group-hover:scale-110 transition-transform duration-500"></i>
                     <div className="absolute top-4 left-4">
-                      <span className={`text-[9px] font-black px-3 py-1.5 rounded-lg border uppercase tracking-widest ${rep.access_tier === 'VIP' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-white text-slate-600 border-slate-200'}`}>
-                        {rep.access_tier} {rep.access_tier === 'VIP' && '👑'}
+                      <span className={`text-[9px] font-black px-3 py-1.5 rounded-lg border uppercase tracking-widest ${rep.access_tier === 'VIP' || rep.access_tier === 'TITANIUM' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-white text-slate-600 border-slate-200'}`}>
+                        {rep.access_tier} {(rep.access_tier === 'VIP' || rep.access_tier === 'TITANIUM') && '👑'}
                       </span>
                     </div>
                   </div>
@@ -164,7 +168,6 @@ export default function MemberInsightsPage() {
                   <h4 className="text-base font-black text-slate-900 leading-snug mb-2">{req.title}</h4>
                   <p className="text-sm font-medium text-slate-500 mb-6 line-clamp-2">{req.content}</p>
                   
-                  {/* Trả kết quả */}
                   {req.status === 'COMPLETED' && req.result_file_url ? (
                     <div className="mt-auto p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
                       <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-2">Phản hồi từ Admin:</p>
@@ -184,7 +187,6 @@ export default function MemberInsightsPage() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
