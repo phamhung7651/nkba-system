@@ -35,22 +35,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         return;
       }
 
-      const individualId = user.user_metadata?.individual_id;
-
       // ==========================================
-      // LẤY THÔNG TIN HỘI VIÊN CÁ NHÂN
+      // LẤY THÔNG TIN HỘI VIÊN CÁ NHÂN BẰNG USER_AUTH_ID (CHUẨN MỚI)
       // ==========================================
-      if (individualId) {
-        const { data: profile } = await supabase
-          .from('individuals')
-          .select(`
-            id, full_name, status,
-            individual_tiers(name, code)
-          `)
-          .eq('id', individualId)
-          .single();
+      const { data: profile } = await supabase
+        .from('individuals')
+        .select(`
+          id, full_name, status,
+          individual_tiers(name, code)
+        `)
+        .eq('user_auth_id', user.id) // <--- Đồng bộ 100% với page.tsx
+        .maybeSingle();
 
-        if (profile && profile.status === 'ACTIVE') {
+      if (profile) {
+        // Chỉ hiện thanh công cụ nếu tài khoản đã được ACTIVE
+        if (profile.status === 'ACTIVE') {
           setCurrentUser({
             id: profile.id,
             name: profile.full_name,
@@ -72,18 +71,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         }
       } 
       // ==========================================
-      // LẤY THÔNG TIN QUẢN TRỊ VIÊN (SUPER_ADMIN)
+      // NẾU KHÔNG PHẢI HỘI VIÊN -> TÌM TRONG NHÂN VIÊN
       // ==========================================
       else {
         const { data: empData } = await supabase
           .from('employees')
           .select('name, role')
           .eq('email', user.email)
-          .single();
+          .maybeSingle();
 
         if (empData) {
           setCurrentUser({
-            id: user.id, // Admin lấy auth_id làm ID tạm
+            id: user.id,
             name: empData.name || 'Quản trị viên',
             tier: empData.role === 'SUPER_ADMIN' ? 'SUPER ADMIN' : 'ADMIN',
             is_admin: true
