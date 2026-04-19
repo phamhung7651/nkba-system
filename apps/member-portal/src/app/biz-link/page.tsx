@@ -106,23 +106,40 @@ export default function MemberBizLinkPage() {
         </div>
       </div>
 
-      {/* TAB 1: MARKET (UPSELL) */}
+      {/* TAB 1: MARKET (UPSELL & LIÊN KẾT DIRECTORY) */}
       {activeTab === 'market' && (
-        <div className="bg-gradient-to-br from-amber-50 to-white border border-amber-100 rounded-3xl p-10 md:p-20 text-center flex flex-col items-center shadow-sm relative overflow-hidden group">
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in slide-in-from-bottom-4 duration-500">
           
-          <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-8 shadow-xl border border-amber-100 relative z-10 group-hover:scale-110 transition-transform duration-500">
-            <i className="ph-fill ph-crown text-5xl text-amber-500"></i>
+          {/* Box 1: Upsell xem gói thầu */}
+          <div className="bg-gradient-to-br from-amber-50 to-white border border-amber-100 rounded-3xl p-10 text-center flex flex-col items-center shadow-sm relative overflow-hidden group">
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-6 shadow-xl border border-amber-100 relative z-10 group-hover:scale-110 transition-transform duration-500">
+              <i className="ph-fill ph-crown text-4xl text-amber-500"></i>
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 relative z-10 mb-3">Đặc quyền Hội viên Cao cấp</h3>
+            <p className="text-sm text-slate-600 leading-relaxed relative z-10 mb-8">
+              Không gian giao thương khép kín. Nâng cấp thẻ để tiếp cận danh sách thầu nội bộ, xem dự toán chi tiết.
+            </p>
+            <button className="mt-auto px-8 py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-2xl font-black shadow-lg hover:shadow-amber-500/30 hover:-translate-y-1 transition-all relative z-10 flex items-center gap-2">
+              NÂNG CẤP THẺ NGAY <i className="ph-bold ph-arrow-right"></i>
+            </button>
           </div>
-          
-          <h3 className="text-2xl md:text-3xl font-black text-slate-900 relative z-10 mb-4">Đặc quyền Hội viên Cao cấp</h3>
-          <p className="text-base text-slate-600 max-w-lg leading-relaxed relative z-10 mb-8">
-            Không gian giao thương khép kín. Nâng cấp hạng thẻ của bạn để tiếp cận danh sách thầu nội bộ, xem dự toán chi tiết và kết nối trực tiếp với các Tổng thầu/Chủ đầu tư lớn.
-          </p>
-          
-          <button className="px-10 py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-2xl font-black shadow-lg hover:shadow-amber-500/30 hover:-translate-y-1 transition-all relative z-10 flex items-center gap-2">
-            NÂNG CẤP HẠNG THẺ <i className="ph-bold ph-arrow-right"></i>
-          </button>
+
+          {/* Box 2: Liên kết sang Mạng lưới thành viên */}
+          <div className="bg-gradient-to-br from-[#002D62] to-blue-900 rounded-3xl p-10 text-center flex flex-col items-center shadow-xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-white opacity-5 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2"></div>
+            <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mb-6 shadow-inner border border-white/20 relative z-10 group-hover:scale-110 transition-transform duration-500 backdrop-blur-md text-blue-300">
+              <i className="ph-fill ph-globe-hemisphere-west text-4xl"></i>
+            </div>
+            <h3 className="text-2xl font-black text-white relative z-10 mb-3">Chủ động Tìm Đối Tác</h3>
+            <p className="text-sm text-blue-200 leading-relaxed relative z-10 mb-8">
+              Không cần chờ đợi dự án? Hãy chủ động truy cập Danh bạ Doanh nghiệp NKBA để tìm kiếm nhà cung cấp, thầu phụ phù hợp với bạn.
+            </p>
+            <Link href="/directory" className="mt-auto px-8 py-3.5 bg-white text-[#002D62] rounded-2xl font-black shadow-lg hover:bg-slate-100 hover:-translate-y-1 transition-all relative z-10 flex items-center gap-2">
+              VÀO MẠNG LƯỚI THÀNH VIÊN <i className="ph-bold ph-arrow-right"></i>
+            </Link>
+          </div>
+
         </div>
       )}
 

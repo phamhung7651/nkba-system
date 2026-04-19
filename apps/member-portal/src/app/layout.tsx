@@ -111,6 +111,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     { name: 'Sàn Biz-Link', path: '/biz-link', icon: 'ph-handshake' },
     { name: 'Tuyển dụng', path: '/talent-hub', icon: 'ph-users-three' },
     { name: 'Insights VIP', path: '/insights', icon: 'ph-chart-polar' },
+    { name: 'Mạng lưới', path: '/directory', icon: 'ph-globe-hemisphere-west' },
   ];
 
   return (
