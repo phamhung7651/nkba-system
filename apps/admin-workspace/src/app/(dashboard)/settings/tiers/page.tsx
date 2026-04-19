@@ -15,7 +15,6 @@ const PORTAL_FEATURES = [
 
 export default function TiersConfigPage() {
   const supabase = createClient();
-  // Đã thêm tab 'permissions'
   const [activeTab, setActiveTab] = useState<'individual' | 'corporate' | 'permissions'>('individual');
   const [isLoading, setIsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,12 +26,18 @@ export default function TiersConfigPage() {
   // Ma trận Đặc quyền (Feature Flags)
   const [tierMatrix, setTierMatrix] = useState<Record<string, Record<string, boolean>>>({});
 
-  // Form States cho Gói Cá nhân
+  // ----------------------------------------------------
+  // STATES CHO CHỨC NĂNG THÊM / SỬA GÓI CÁ NHÂN
+  // ----------------------------------------------------
+  const [editingIndTierId, setEditingIndTierId] = useState<string | null>(null);
   const [newIndTier, setNewIndTier] = useState({
     code: '', name: '', annual_fee: 0
   });
 
-  // Form States cho Gói Doanh nghiệp
+  // ----------------------------------------------------
+  // STATES CHO CHỨC NĂNG THÊM / SỬA GÓI DOANH NGHIỆP
+  // ----------------------------------------------------
+  const [editingCorpTierId, setEditingCorpTierId] = useState<string | null>(null);
   const [newCorpTier, setNewCorpTier] = useState({
     code: '', name: '', annual_fee: 0,
     quota_silver: 0, quota_gold: 0, quota_titanium: 0
@@ -43,7 +48,7 @@ export default function TiersConfigPage() {
     const [indRes, corpRes, tierFeatRes] = await Promise.all([
       supabase.from('individual_tiers').select('*').order('annual_fee', { ascending: true }),
       supabase.from('corporate_tiers').select('*').order('annual_fee', { ascending: true }),
-      supabase.from('tier_features').select('*') // Bảng cấu hình tính năng hội viên
+      supabase.from('tier_features').select('*')
     ]);
 
     const fetchedIndTiers = indRes.data || [];
@@ -73,39 +78,102 @@ export default function TiersConfigPage() {
 
   useEffect(() => { fetchData(); }, []);
 
-  // HÀM LƯU GÓI CÁ NHÂN
+  // ====================================================
+  // LOGIC CRUD GÓI CÁ NHÂN (THÊM / SỬA / XÓA)
+  // ====================================================
   const handleSaveIndTier = async () => {
     if (!newIndTier.code || !newIndTier.name) return alert('Vui lòng nhập đủ Mã và Tên gói cá nhân!');
-    const { error } = await supabase.from('individual_tiers').insert([{
-      ...newIndTier, 
-      code: newIndTier.code.toUpperCase().replace(/\s+/g, '_')
-    }]);
     
-    if (error) alert('Lỗi: ' + (error.code === '23505' ? 'Mã gói này đã tồn tại!' : error.message));
-    else {
-      alert('✅ Đã thêm gói Cá nhân mới!');
-      setNewIndTier({ code: '', name: '', annual_fee: 0 });
-      fetchData();
+    if (editingIndTierId) {
+      // CẬP NHẬT
+      const { error } = await supabase.from('individual_tiers').update({
+        code: newIndTier.code.toUpperCase().replace(/\s+/g, '_'),
+        name: newIndTier.name,
+        annual_fee: newIndTier.annual_fee
+      }).eq('id', editingIndTierId);
+      
+      if (error) alert('Lỗi cập nhật: ' + error.message);
+      else {
+        alert('✅ Đã cập nhật gói thành công!');
+        setEditingIndTierId(null);
+        setNewIndTier({ code: '', name: '', annual_fee: 0 });
+        fetchData();
+      }
+    } else {
+      // THÊM MỚI
+      const { error } = await supabase.from('individual_tiers').insert([{
+        ...newIndTier, 
+        code: newIndTier.code.toUpperCase().replace(/\s+/g, '_')
+      }]);
+      
+      if (error) alert('Lỗi: ' + (error.code === '23505' ? 'Mã gói này đã tồn tại!' : error.message));
+      else {
+        alert('✅ Đã thêm gói Cá nhân mới!');
+        setNewIndTier({ code: '', name: '', annual_fee: 0 });
+        fetchData();
+      }
     }
   };
 
-  // HÀM LƯU GÓI DOANH NGHIỆP
+  const handleDeleteIndTier = async (id: string, code: string) => {
+    if (code === 'VIP') return alert('Gói VIP là gói mặc định của hệ thống, không thể xóa!');
+    if (!confirm(`Bạn có chắc muốn xóa gói [${code}]? Dữ liệu hội viên đang dùng gói này có thể bị ảnh hưởng.`)) return;
+    
+    const { error } = await supabase.from('individual_tiers').delete().eq('id', id);
+    if (error) alert('Lỗi xóa: ' + error.message);
+    else fetchData();
+  };
+
+  // ====================================================
+  // LOGIC CRUD GÓI DOANH NGHIỆP (THÊM / SỬA / XÓA)
+  // ====================================================
   const handleSaveCorpTier = async () => {
     if (!newCorpTier.code || !newCorpTier.name) return alert('Vui lòng nhập đủ Mã và Tên gói doanh nghiệp!');
-    const { error } = await supabase.from('corporate_tiers').insert([{
-      ...newCorpTier,
-      code: newCorpTier.code.toUpperCase().replace(/\s+/g, '_')
-    }]);
     
-    if (error) alert('Lỗi: ' + (error.code === '23505' ? 'Mã gói này đã tồn tại!' : error.message));
-    else {
-      alert('✅ Đã thêm gói Doanh nghiệp mới!');
-      setNewCorpTier({ code: '', name: '', annual_fee: 0, quota_silver: 0, quota_gold: 0, quota_titanium: 0 });
-      fetchData();
+    if (editingCorpTierId) {
+      // CẬP NHẬT
+      const { error } = await supabase.from('corporate_tiers').update({
+        code: newCorpTier.code.toUpperCase().replace(/\s+/g, '_'),
+        name: newCorpTier.name,
+        annual_fee: newCorpTier.annual_fee,
+        quota_silver: newCorpTier.quota_silver,
+        quota_gold: newCorpTier.quota_gold,
+        quota_titanium: newCorpTier.quota_titanium
+      }).eq('id', editingCorpTierId);
+
+      if (error) alert('Lỗi cập nhật: ' + error.message);
+      else {
+        alert('✅ Đã cập nhật gói Doanh nghiệp thành công!');
+        setEditingCorpTierId(null);
+        setNewCorpTier({ code: '', name: '', annual_fee: 0, quota_silver: 0, quota_gold: 0, quota_titanium: 0 });
+        fetchData();
+      }
+    } else {
+      // THÊM MỚI
+      const { error } = await supabase.from('corporate_tiers').insert([{
+        ...newCorpTier,
+        code: newCorpTier.code.toUpperCase().replace(/\s+/g, '_')
+      }]);
+      
+      if (error) alert('Lỗi: ' + (error.code === '23505' ? 'Mã gói này đã tồn tại!' : error.message));
+      else {
+        alert('✅ Đã thêm gói Doanh nghiệp mới!');
+        setNewCorpTier({ code: '', name: '', annual_fee: 0, quota_silver: 0, quota_gold: 0, quota_titanium: 0 });
+        fetchData();
+      }
     }
   };
 
+  const handleDeleteCorpTier = async (id: string, code: string) => {
+    if (!confirm(`Bạn có chắc muốn xóa gói doanh nghiệp [${code}]?`)) return;
+    const { error } = await supabase.from('corporate_tiers').delete().eq('id', id);
+    if (error) alert('Lỗi xóa: ' + error.message);
+    else fetchData();
+  };
+
+  // ====================================================
   // LOGIC LƯU ĐẶC QUYỀN
+  // ====================================================
   const toggleTierFeature = (tierCode: string, featureCode: string) => {
     if (tierCode === 'VIP') return alert("Hạng VIP mặc định mở khóa mọi tính năng!");
     setTierMatrix(prev => ({ ...prev, [tierCode]: { ...prev[tierCode], [featureCode]: !prev[tierCode][featureCode] } }));
@@ -137,7 +205,6 @@ export default function TiersConfigPage() {
           <p className="text-slate-500 text-sm mt-1 font-medium">Định nghĩa giá trị gói hội viên, hạn mức Quota và Đặc quyền sử dụng Portal.</p>
         </div>
 
-        {/* Nút lưu xuất hiện khi ở Tab Đặc quyền */}
         {activeTab === 'permissions' && (
           <button onClick={saveTierMatrix} disabled={saving} className="px-8 py-3 bg-amber-500 text-[#002D62] text-sm font-black rounded-xl shadow-md disabled:bg-slate-400 hover:bg-amber-400 transition-colors">
             {saving ? 'ĐANG LƯU...' : 'LƯU ĐẶC QUYỀN'}
@@ -153,19 +220,20 @@ export default function TiersConfigPage() {
         <button onClick={() => setActiveTab('corporate')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'corporate' ? 'bg-[#002D62] text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}>
           <i className="ph-fill ph-buildings mr-2"></i> Gói Doanh nghiệp & Quota
         </button>
-        {/* THÊM TAB MỚI */}
         <button onClick={() => setActiveTab('permissions')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'permissions' ? 'bg-amber-400 text-amber-900 shadow-md' : 'text-slate-500 hover:text-amber-600'}`}>
           <i className="ph-fill ph-crown mr-2"></i> Đặc quyền Portal (Feature Flags)
         </button>
       </div>
 
-      {/* TAB 1: GÓI CÁ NHÂN (GIỮ NGUYÊN CỦA BẠN) */}
+      {/* TAB 1: GÓI CÁ NHÂN */}
       {activeTab === 'individual' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          {/* Form thêm mới Cá nhân */}
-          <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm relative lg:sticky lg:top-6">
+          
+          {/* Form thêm/sửa Cá nhân */}
+          <div className={`bg-white p-6 md:p-8 rounded-2xl border shadow-sm relative lg:sticky lg:top-6 transition-all ${editingIndTierId ? 'border-amber-300 ring-2 ring-amber-100 bg-amber-50/20' : 'border-slate-200'}`}>
             <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-              <i className="ph-bold ph-plus-circle text-amber-500 text-xl"></i> Tạo gói Cá nhân
+              <i className={`ph-bold ${editingIndTierId ? 'ph-pencil-simple text-amber-500' : 'ph-plus-circle text-emerald-500'} text-xl`}></i> 
+              {editingIndTierId ? 'Cập nhật gói Cá nhân' : 'Tạo gói Cá nhân'}
             </h3>
             <div className="space-y-5">
               <div>
@@ -180,7 +248,15 @@ export default function TiersConfigPage() {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phí thường niên (VNĐ)</label>
                 <input type="number" value={newIndTier.annual_fee || ''} onChange={e => setNewIndTier({...newIndTier, annual_fee: Number(e.target.value)})} placeholder="0" className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl mt-1.5 font-black text-amber-600 outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-500/10 transition-all" />
               </div>
-              <button onClick={handleSaveIndTier} className="w-full h-12 mt-2 bg-[#002D62] text-white text-sm font-bold rounded-xl hover:bg-blue-900 transition-all shadow-md">THÊM GÓI CÁ NHÂN</button>
+              
+              <div className="flex gap-2 mt-4">
+                <button onClick={handleSaveIndTier} className={`flex-1 h-12 text-white text-sm font-bold rounded-xl transition-all shadow-md ${editingIndTierId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-[#002D62] hover:bg-blue-900'}`}>
+                  {editingIndTierId ? 'CẬP NHẬT' : 'THÊM MỚI'}
+                </button>
+                {editingIndTierId && (
+                  <button onClick={() => {setEditingIndTierId(null); setNewIndTier({code: '', name: '', annual_fee: 0})}} className="px-5 h-12 bg-white border border-slate-200 text-slate-600 text-sm font-bold rounded-xl hover:bg-slate-50 transition-all">HỦY</button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -190,14 +266,30 @@ export default function TiersConfigPage() {
               <div className="p-10 text-center bg-white border border-dashed border-slate-200 rounded-2xl text-slate-400 font-medium">Chưa có gói cá nhân nào. Hãy tạo ở bên trái.</div>
             ) : (
               indTiers.map(tier => (
-                <div key={tier.id} className="bg-white p-5 md:px-6 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center group hover:border-amber-300 hover:shadow-md transition-all">
+                <div key={tier.id} className="bg-white p-5 md:px-6 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center group hover:border-amber-300 hover:shadow-md transition-all relative overflow-hidden">
+                  
+                  {/* Nhóm Nút Xóa/Sửa (Ẩn, hiện khi Hover) */}
+                  <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white pl-4">
+                    <button onClick={() => {
+                      setEditingIndTierId(tier.id);
+                      setNewIndTier({ code: tier.code, name: tier.name, annual_fee: tier.annual_fee });
+                    }} className="w-8 h-8 rounded bg-white border border-slate-200 text-amber-600 hover:bg-amber-50 hover:border-amber-300 flex items-center justify-center transition-colors shadow-sm">
+                      <i className="ph-bold ph-pencil-simple"></i>
+                    </button>
+                    {tier.code !== 'VIP' && (
+                      <button onClick={() => handleDeleteIndTier(tier.id, tier.code)} className="w-8 h-8 rounded bg-white border border-slate-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 flex items-center justify-center transition-colors shadow-sm">
+                        <i className="ph-bold ph-trash"></i>
+                      </button>
+                    )}
+                  </div>
+
                   <div>
                     <div className="flex items-center gap-3">
                       <span className="bg-amber-100 text-amber-700 border border-amber-200 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest">{tier.code}</span>
                       <h4 className="font-black text-slate-800 text-base md:text-lg">{tier.name}</h4>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right group-hover:opacity-0 transition-opacity">
                     <p className="text-[10px] font-bold text-slate-400 uppercase">Phí thường niên</p>
                     <p className="text-amber-600 font-black text-base md:text-lg mt-0.5">{tier.annual_fee === 0 ? 'MIỄN PHÍ' : `${tier.annual_fee.toLocaleString()} đ`}</p>
                   </div>
@@ -208,13 +300,15 @@ export default function TiersConfigPage() {
         </div>
       )}
 
-      {/* TAB 2: GÓI DOANH NGHIỆP & QUOTA (GIỮ NGUYÊN CỦA BẠN) */}
+      {/* TAB 2: GÓI DOANH NGHIỆP & QUOTA */}
       {activeTab === 'corporate' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          {/* Form thêm mới Doanh nghiệp */}
-          <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm relative lg:sticky lg:top-6">
+          
+          {/* Form thêm/sửa Doanh nghiệp */}
+          <div className={`bg-white p-6 md:p-8 rounded-2xl border shadow-sm relative lg:sticky lg:top-6 transition-all ${editingCorpTierId ? 'border-amber-300 ring-2 ring-amber-100 bg-amber-50/20' : 'border-slate-200'}`}>
             <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-              <i className="ph-bold ph-plus-circle text-blue-600 text-xl"></i> Tạo gói Doanh nghiệp
+              <i className={`ph-bold ${editingCorpTierId ? 'ph-pencil-simple text-amber-500' : 'ph-plus-circle text-blue-600'} text-xl`}></i> 
+              {editingCorpTierId ? 'Cập nhật gói Doanh nghiệp' : 'Tạo gói Doanh nghiệp'}
             </h3>
             <div className="space-y-5">
               <div>
@@ -230,7 +324,6 @@ export default function TiersConfigPage() {
                 <input type="number" value={newCorpTier.annual_fee || ''} onChange={e => setNewCorpTier({...newCorpTier, annual_fee: Number(e.target.value)})} placeholder="0" className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl mt-1.5 font-black text-blue-600 outline-none focus:border-blue-400 focus:bg-white transition-all" />
               </div>
               
-              {/* VÙNG NHẬP QUOTA */}
               <div className="p-5 bg-blue-50/50 rounded-xl border border-blue-100">
                 <p className="text-xs font-black text-[#002D62] uppercase mb-4 text-center">Cấp hạn mức thẻ Cá nhân (Quota)</p>
                 <div className="grid grid-cols-3 gap-3">
@@ -249,7 +342,14 @@ export default function TiersConfigPage() {
                 </div>
               </div>
               
-              <button onClick={handleSaveCorpTier} className="w-full h-12 mt-2 bg-[#002D62] text-white text-sm font-bold rounded-xl hover:bg-blue-900 transition-all shadow-md">THÊM GÓI DOANH NGHIỆP</button>
+              <div className="flex gap-2 mt-4">
+                <button onClick={handleSaveCorpTier} className={`flex-1 h-12 text-white text-sm font-bold rounded-xl transition-all shadow-md ${editingCorpTierId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-[#002D62] hover:bg-blue-900'}`}>
+                  {editingCorpTierId ? 'CẬP NHẬT' : 'THÊM MỚI'}
+                </button>
+                {editingCorpTierId && (
+                  <button onClick={() => {setEditingCorpTierId(null); setNewCorpTier({code: '', name: '', annual_fee: 0, quota_silver: 0, quota_gold: 0, quota_titanium: 0})}} className="px-5 h-12 bg-white border border-slate-200 text-slate-600 text-sm font-bold rounded-xl hover:bg-slate-50 transition-all">HỦY</button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -259,8 +359,22 @@ export default function TiersConfigPage() {
                <div className="p-10 text-center bg-white border border-dashed border-slate-200 rounded-2xl text-slate-400 font-medium">Chưa có gói doanh nghiệp nào. Hãy tạo ở bên trái.</div>
             ) : (
               corpTiers.map(tier => (
-                <div key={tier.id} className="bg-white p-5 md:px-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 group hover:border-blue-400 hover:shadow-md transition-all">
-                  <div>
+                <div key={tier.id} className="bg-white p-5 md:px-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 group hover:border-blue-400 hover:shadow-md transition-all relative overflow-hidden">
+                  
+                  {/* Nhóm Nút Xóa/Sửa (Ẩn, hiện khi Hover) */}
+                  <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white pl-4 z-10">
+                    <button onClick={() => {
+                      setEditingCorpTierId(tier.id);
+                      setNewCorpTier({ code: tier.code, name: tier.name, annual_fee: tier.annual_fee, quota_silver: tier.quota_silver, quota_gold: tier.quota_gold, quota_titanium: tier.quota_titanium });
+                    }} className="w-8 h-8 rounded bg-white border border-slate-200 text-amber-600 hover:bg-amber-50 hover:border-amber-300 flex items-center justify-center transition-colors shadow-sm">
+                      <i className="ph-bold ph-pencil-simple"></i>
+                    </button>
+                    <button onClick={() => handleDeleteCorpTier(tier.id, tier.code)} className="w-8 h-8 rounded bg-white border border-slate-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 flex items-center justify-center transition-colors shadow-sm">
+                      <i className="ph-bold ph-trash"></i>
+                    </button>
+                  </div>
+
+                  <div className="group-hover:opacity-20 transition-opacity">
                     <div className="flex items-center gap-3">
                       <span className="bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest">{tier.code}</span>
                       <h4 className="font-black text-slate-800 text-base md:text-lg">{tier.name}</h4>
@@ -268,8 +382,7 @@ export default function TiersConfigPage() {
                     <p className="text-blue-600 font-black text-sm mt-1.5">{tier.annual_fee === 0 ? 'MIỄN PHÍ' : `${tier.annual_fee.toLocaleString()} đ`} / năm</p>
                   </div>
                   
-                  {/* Hiển thị Quota */}
-                  <div className="flex gap-2 w-full md:w-auto bg-slate-50 p-2 rounded-xl border border-slate-100">
+                  <div className="flex gap-2 w-full md:w-auto bg-slate-50 p-2 rounded-xl border border-slate-100 group-hover:opacity-20 transition-opacity">
                     <div className="flex-1 md:w-16 text-center px-2">
                       <p className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Silver</p>
                       <p className="font-black text-slate-700">{tier.quota_silver}</p>
@@ -292,7 +405,7 @@ export default function TiersConfigPage() {
         </div>
       )}
 
-      {/* TAB 3: ĐẶC QUYỀN PORTAL (MỚI THÊM VÀO ĐÂY) */}
+      {/* TAB 3: ĐẶC QUYỀN PORTAL */}
       {activeTab === 'permissions' && (
         <div className="bg-gradient-to-br from-amber-50 to-white rounded-2xl border border-amber-200 shadow-sm overflow-x-auto animate-in slide-in-from-bottom-4">
           <div className="p-6 border-b border-amber-100 bg-amber-100/50">
