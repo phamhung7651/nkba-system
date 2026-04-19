@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import Link from 'next/link';
 
 export default function MemberTalentHubPage() {
-  const [supabase] = useState(() => createClient()); // Fix lỗi đa nhân cách
+  const [supabase] = useState(() => createClient());
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'talent-pool' | 'my-jobs'>('talent-pool');
   
@@ -27,7 +28,6 @@ export default function MemberTalentHubPage() {
         .single();
 
       if (profile) {
-        // Trích xuất mã Tier (Ví dụ: 'PREMIUM', 'VIP') để dùng cho logic Upsell
         const tierCode = Array.isArray(profile.individual_tiers) 
           ? profile.individual_tiers[0]?.code 
           : (profile.individual_tiers as any)?.code;
@@ -68,129 +68,127 @@ export default function MemberTalentHubPage() {
     setIsSubmitting(false);
   };
 
-  const canViewContact = (tierCode: string) => tierCode === 'PREMIUM' || tierCode === 'VIP' || tierCode === 'TITANIUM';
+  const canViewContact = (tierCode: string) => ['PREMIUM', 'TITANIUM', 'VIP', 'GOLD'].includes(tierCode);
 
-  if (!currentUser) return <div className="p-20 text-center text-slate-400 font-bold animate-pulse">Đang tải Trung tâm Nhân sự...</div>;
+  if (!currentUser) return <div className="flex h-[60vh] items-center justify-center text-slate-400 font-bold"><i className="ph-bold ph-spinner animate-spin text-3xl mr-3 text-[#002D62]"></i> Đang kết nối Talent Hub...</div>;
 
   return (
-    <div className="space-y-8 animate-in fade-in">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between md:items-end gap-6 border-b border-slate-200 pb-6">
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Talent Hub</h1>
-          <p className="text-sm font-medium text-slate-500 mt-2">Tuyển dụng cấp cao & Trạm Săn Đầu Người Nội Bộ.</p>
-        </div>
-        <div className="flex gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-          <button onClick={() => setActiveTab('talent-pool')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'talent-pool' ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-900'}`}>Hồ Cá Chuyên Gia</button>
-          <button onClick={() => setActiveTab('my-jobs')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'my-jobs' ? 'bg-[#002D62] text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>Tin Tuyển Dụng Của Tôi</button>
+    <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-10 animate-in fade-in duration-500">
+      
+      {/* HEADER & TABS */}
+      <div className="bg-white p-6 md:px-8 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-2 h-full bg-indigo-600"></div>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+          <div>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+              <i className="ph-fill ph-users-four text-indigo-600"></i> Talent Hub
+            </h1>
+            <p className="text-sm font-medium text-slate-500 mt-2 ml-10">Mạng lưới chuyên gia và Trạm săn đầu người nội bộ.</p>
+          </div>
+          
+          <div className="flex gap-1 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shrink-0 w-full md:w-auto">
+            <button onClick={() => setActiveTab('talent-pool')} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-black transition-all ${activeTab === 'talent-pool' ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700'}`}>Hồ Cá Chuyên Gia</button>
+            <button onClick={() => setActiveTab('my-jobs')} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-black transition-all ${activeTab === 'my-jobs' ? 'bg-[#002D62] text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}>Tin Tuyển Dụng</button>
+          </div>
         </div>
       </div>
 
       {activeTab === 'talent-pool' && (
-        <div className="space-y-6">
-          <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-2xl flex items-center justify-between">
-            <div>
-              <h3 className="text-indigo-900 font-black text-lg">Mạng lưới Nhân tài Tinh hoa</h3>
-              <p className="text-indigo-700 text-sm mt-1">Các hồ sơ dưới đây đều đã được Admin NKBA kiểm chứng năng lực, phỏng vấn và cấp Tick Xanh.</p>
+        <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+          {/* BANNER GIỚI THIỆU */}
+          <div className="bg-gradient-to-r from-indigo-600 to-violet-700 p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
+            <div className="absolute right-0 bottom-0 opacity-10"><i className="ph-fill ph-identification-card text-[200px] translate-y-10 translate-x-10"></i></div>
+            <div className="relative z-10 max-w-2xl">
+              <h3 className="text-xl font-black mb-2">Nhân tài Tinh hoa Việt - Nhật</h3>
+              <p className="text-indigo-100 text-sm font-medium leading-relaxed">Tiếp cận danh sách kỹ sư, quản lý dự án và chuyên gia đã được NKBA xác thực năng lực (Verified Profile).</p>
             </div>
-            {!canViewContact(currentUser.tier_code) && (
-              <div className="hidden md:flex items-center gap-2 bg-white px-4 py-2 rounded-xl text-rose-600 text-xs font-black shadow-sm border border-rose-100">
-                <i className="ph ph-lock-key text-base"></i> TÍNH NĂNG BỊ GIỚI HẠN
-              </div>
-            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {talents.length === 0 ? <div className="col-span-full p-10 text-center text-slate-400 italic">Hiện chưa có chuyên gia nào trên sàn.</div> :
-              talents.map(talent => (
-                <div key={talent.id} className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex flex-col hover:border-indigo-300 transition-all relative overflow-hidden">
-                  <i className="ph ph-seal-check absolute top-4 right-4 text-5xl text-blue-50 opacity-50 pointer-events-none"></i>
-                  <div className="flex items-center gap-4 mb-4 relative z-10">
-                    <div className="w-14 h-14 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-lg font-black shadow-inner border border-slate-200 shrink-0">
-                      {talent.full_name.charAt(0)}
-                    </div>
-                    <div>
-                      <h4 className="text-base font-black text-slate-900 flex items-center gap-1">{talent.full_name} <svg width="14" height="14" fill="currentColor" className="text-blue-500" viewBox="0 0 256 256"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"></path></svg></h4>
-                      <p className="text-xs font-bold text-indigo-600">{talent.title}</p>
-                    </div>
+            {talents.map(talent => (
+              <div key={talent.id} className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all group relative">
+                <div className="flex items-center gap-5 mb-6">
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl font-black shadow-inner group-hover:scale-110 transition-transform">
+                    {talent.full_name.charAt(0)}
                   </div>
-
-                  <div className="space-y-2 mb-6">
-                    <p className="text-sm text-slate-600 flex items-center gap-2"><i className="ph ph-briefcase text-slate-400"></i> Kinh nghiệm: <span className="font-bold">{talent.experience_years} năm</span></p>
-                    <p className="text-sm text-slate-600 flex items-center gap-2"><i className="ph ph-money text-emerald-500"></i> Mong muốn: <span className="font-bold text-slate-800">{talent.expected_salary || 'Thỏa thuận'}</span></p>
-                    <div className="flex flex-wrap gap-1 mt-3">
-                      {talent.skills ? talent.skills.split(',').slice(0, 3).map((skill: string, idx: number) => (
-                        <span key={idx} className="bg-slate-50 text-slate-500 text-[10px] font-bold px-2 py-1 rounded border border-slate-200 uppercase">{skill.trim()}</span>
-                      )) : <span className="text-xs italic text-slate-400">Nhiều kỹ năng chuyên sâu</span>}
-                    </div>
+                  <div>
+                    <h4 className="text-lg font-black text-slate-900 flex items-center gap-1.5">{talent.full_name} <i className="ph-fill ph-seal-check text-blue-500"></i></h4>
+                    <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest">{talent.title}</p>
                   </div>
-
-                  {canViewContact(currentUser.tier_code) ? (
-                    <div className="mt-auto pt-4 border-t border-slate-100">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Thông tin liên hệ</p>
-                      <p className="text-sm font-medium text-slate-800 flex items-center gap-2"><i className="ph ph-envelope-simple text-blue-500"></i> {talent.email || 'Chưa cập nhật'}</p>
-                      <p className="text-sm font-medium text-slate-800 flex items-center gap-2 mt-1"><i className="ph ph-phone text-emerald-500"></i> {talent.phone || 'Chưa cập nhật'}</p>
-                    </div>
-                  ) : (
-                    <div className="mt-auto pt-4 border-t border-slate-100 flex flex-col items-center text-center">
-                      <i className="ph ph-lock-key text-2xl text-slate-300 mb-1"></i>
-                      <p className="text-xs font-bold text-slate-500">SĐT và Email đã bị ẩn.</p>
-                      <button className="mt-2 text-xs font-black text-amber-600 hover:underline uppercase tracking-widest">Nâng cấp VIP để mở khóa</button>
-                    </div>
-                  )}
                 </div>
-              ))
-            }
+
+                <div className="space-y-3 mb-8">
+                  <div className="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400"><i className="ph-fill ph-briefcase"></i></div>
+                    Kinh nghiệm: <span className="text-slate-900 font-bold">{talent.experience_years} năm</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-emerald-500"><i className="ph-fill ph-money"></i></div>
+                    Mong muốn: <span className="text-emerald-700 font-bold">{talent.expected_salary || 'Thỏa thuận'}</span>
+                  </div>
+                </div>
+
+                {canViewContact(currentUser.tier_code) ? (
+                  <div className="pt-6 border-t border-slate-100 space-y-2">
+                    <p className="text-sm font-bold text-slate-700 flex items-center gap-2"><i className="ph-bold ph-envelope text-indigo-500"></i> {talent.email}</p>
+                    <p className="text-sm font-bold text-slate-700 flex items-center gap-2"><i className="ph-bold ph-phone text-emerald-500"></i> {talent.phone}</p>
+                  </div>
+                ) : (
+                  <div className="pt-6 border-t border-slate-100">
+                    <div className="bg-slate-50 p-4 rounded-2xl text-center">
+                      <i className="ph-fill ph-lock-key text-slate-300 text-xl mb-1"></i>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Nâng cấp VIP để xem Contact</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}
 
       {activeTab === 'my-jobs' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center bg-blue-50 border border-blue-100 p-5 rounded-2xl shadow-inner">
-            <p className="text-sm font-bold text-blue-800">Đăng tuyển vị trí quản lý, kỹ sư trưởng hoặc chuyên gia?</p>
-            <button onClick={() => setShowForm(!showForm)} className="h-11 px-6 bg-blue-600 text-white rounded-xl text-sm font-black shadow-md hover:bg-blue-700 transition-colors flex items-center gap-2">
-              <i className={`ph ${showForm ? 'ph-x' : 'ph-plus'} text-lg`}></i> {showForm ? 'HỦY' : 'ĐĂNG TIN MỚI'}
+        <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+          <div className="flex flex-col md:flex-row justify-between items-center bg-gradient-to-r from-slate-900 to-[#002D62] p-8 rounded-3xl shadow-xl text-white">
+            <div className="mb-6 md:mb-0">
+              <h3 className="text-xl font-black mb-2">Tìm kiếm Nhân sự Cấp cao</h3>
+              <p className="text-blue-200 text-sm font-medium">Đăng tin tuyển dụng để tiếp cận mạng lưới chuyên gia trong Liên minh.</p>
+            </div>
+            <button onClick={() => setShowForm(!showForm)} className="h-14 px-8 bg-white text-[#002D62] rounded-2xl font-black shadow-lg hover:scale-105 transition-all flex items-center gap-2">
+              <i className={`ph-bold ${showForm ? 'ph-x' : 'ph-plus'}`}></i> {showForm ? 'HỦY' : 'ĐĂNG TIN MỚI'}
             </button>
           </div>
 
           {showForm && (
-            <div className="bg-white border border-slate-200 p-8 rounded-[2rem] shadow-md animate-in slide-in-from-top-4">
-              <h3 className="text-xl font-black text-slate-900 mb-6 border-b border-slate-100 pb-4">Tạo Yêu cầu Tuyển dụng</h3>
+            <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm animate-in zoom-in-95">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Chức danh / Vị trí (*)</label><input type="text" value={jobForm.title} onChange={e => setJobForm({...jobForm, title: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:bg-white focus:border-blue-400" placeholder="VD: Giám đốc Dự án ME..." /></div>
-                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Mức lương dự kiến</label><input type="text" value={jobForm.salary_range} onChange={e => setJobForm({...jobForm, salary_range: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:bg-white focus:border-blue-400" placeholder="VD: 30tr - 50tr hoặc Thỏa thuận" /></div>
-                <div className="col-span-2 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Mô tả & Yêu cầu công việc</label><textarea value={jobForm.requirements} onChange={e => setJobForm({...jobForm, requirements: e.target.value})} className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none resize-none focus:bg-white focus:border-blue-400" placeholder="Yêu cầu số năm kinh nghiệm, bằng cấp, kỹ năng mềm..." /></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Vị trí tuyển dụng</label><input type="text" value={jobForm.title} onChange={e => setJobForm({...jobForm, title: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none focus:bg-white focus:border-indigo-400" placeholder="VD: Kỹ sư trưởng công trình..." /></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Mức lương</label><input type="text" value={jobForm.salary_range} onChange={e => setJobForm({...jobForm, salary_range: e.target.value})} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none focus:bg-white focus:border-indigo-400" placeholder="VD: 25 - 40 Triệu" /></div>
+                <div className="col-span-2 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Yêu cầu & Mô tả</label><textarea value={jobForm.requirements} onChange={e => setJobForm({...jobForm, requirements: e.target.value})} className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none resize-none focus:bg-white" placeholder="Mô tả công việc và tiêu chuẩn ứng viên..." /></div>
               </div>
-              <div className="mt-8 flex justify-end"><button onClick={handleSubmitJob} disabled={isSubmitting} className="h-12 px-8 bg-[#002D62] text-white rounded-xl text-sm font-black shadow-lg hover:bg-blue-900 transition-colors disabled:opacity-50">{isSubmitting ? 'ĐANG GỬI...' : 'GỬI ADMIN DUYỆT'}</button></div>
+              <div className="mt-8 flex justify-end">
+                <button onClick={handleSubmitJob} disabled={isSubmitting} className="h-14 px-10 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2">
+                  {isSubmitting ? <i className="ph-bold ph-spinner animate-spin"></i> : <i className="ph-bold ph-paper-plane-right"></i>} GỬI ADMIN DUYỆT TIN
+                </button>
+              </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
-            {myJobs.length === 0 ? <div className="col-span-full p-10 text-center text-slate-400 italic">Bạn chưa đăng tin tuyển dụng nào.</div> :
-              myJobs.map(job => (
-                <div key={job.id} className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex flex-col">
-                  <div className="flex justify-between items-start mb-4">
-                    <span className={`text-[9px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest ${job.status === 'PENDING' ? 'bg-rose-50 text-rose-600' : job.status === 'OPEN' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500'}`}>
-                      {job.status === 'PENDING' ? 'CHỜ DUYỆT' : job.status}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400">{new Date(job.created_at).toLocaleDateString('vi-VN')}</span>
-                  </div>
-                  <h4 className="text-lg font-black text-slate-900 leading-snug mb-2">{job.title}</h4>
-                  <p className="text-sm font-medium text-slate-500 mb-6 line-clamp-2">{job.requirements}</p>
-                  
-                  <div className="mt-auto pt-4 border-t border-slate-100 flex justify-between items-center">
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mức lương</p>
-                      <p className="text-sm font-black text-emerald-600">{job.salary_range || 'Thỏa thuận'}</p>
-                    </div>
-                    <button className="text-blue-600 hover:text-blue-800 text-xs font-bold uppercase tracking-widest">
-                      Xem CV (0)
-                    </button>
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {myJobs.map(job => (
+              <div key={job.id} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col hover:border-blue-300 transition-all">
+                <div className="flex justify-between items-start mb-4">
+                  <span className={`text-[9px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest ${job.status === 'PENDING' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>{job.status}</span>
+                  <span className="text-[10px] font-bold text-slate-400">{new Date(job.created_at).toLocaleDateString('vi-VN')}</span>
                 </div>
-              ))
-            }
+                <h4 className="text-lg font-black text-slate-900 mb-2">{job.title}</h4>
+                <p className="text-sm text-slate-500 line-clamp-2 mb-6">{job.requirements}</p>
+                <div className="mt-auto pt-4 border-t border-slate-100 flex justify-between items-center">
+                   <div><p className="text-[10px] font-bold text-slate-400 uppercase">Lương</p><p className="text-sm font-black text-emerald-600">{job.salary_range || 'Thỏa thuận'}</p></div>
+                   <button className="text-xs font-black text-blue-600 hover:underline uppercase tracking-widest">Xem 0 Ứng viên <i className="ph-bold ph-caret-right"></i></button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
