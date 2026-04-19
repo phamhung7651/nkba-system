@@ -83,15 +83,36 @@ export default function JoinAlliancePage() {
 
     try {
       const initialStatus = isFreeTier ? 'ACTIVE' : 'PENDING_VERIFICATION'; 
-
-      let finalIndividualId = '';
       let webhookRefId = '';
 
-      // KỊCH BẢN 1: ĐĂNG KÝ CHO DOANH NGHIỆP
+      // ==============================================================
+      // BƯỚC 1: TẠO TÀI KHOẢN BẢO MẬT (AUTH) TRƯỚC TIÊN
+      // ==============================================================
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.fullName, phone: formData.phone,
+            requested_tier: selectedTierData?.name
+          }
+        }
+      });
+
+      if (authError) throw new Error('Lỗi tạo tài khoản bảo mật: ' + authError.message);
+      
+      const userAuthId = authData.user?.id;
+      if (!userAuthId) throw new Error('Không lấy được ID tài khoản bảo mật!');
+
+      // ==============================================================
+      // BƯỚC 2: TẠO HỒ SƠ PHÁP NHÂN & CÁ NHÂN (VÀ GẮN LUÔN AUTH ID)
+      // ==============================================================
+
+      // KỊCH BẢN A: ĐĂNG KÝ CHO DOANH NGHIỆP
       if (memberType === 'CORPORATE') {
         if (!formData.companyName || !formData.taxCode) throw new Error('Vui lòng điền đầy đủ thông tin Doanh nghiệp.');
 
-        // 1. Tạo pháp nhân
+        // Tạo pháp nhân
         const { data: corpData, error: corpError } = await supabase
           .from('corporates')
           .insert([{
@@ -100,65 +121,38 @@ export default function JoinAlliancePage() {
           }])
           .select().single();
 
-        if (corpError) throw new Error('Lỗi tạo hồ sơ doanh nghiệp (Có thể trùng MST): ' + corpError.message);
+        if (corpError) throw new Error('Lỗi tạo hồ sơ doanh nghiệp: ' + corpError.message);
 
-        // 2. Tạo đại diện (GÁN TRỰC TIẾP ID LẤY TỪ GIAO DIỆN)
-        const { data: indData, error: indError } = await supabase
+        // Tạo đại diện (NHÉT LUÔN user_auth_id VÀO ĐÂY)
+        const { error: indError } = await supabase
           .from('individuals')
           .insert([{
             full_name: formData.fullName, email: formData.email, phone: formData.phone,
             corporate_id: corpData.id, is_corporate_sponsored: true, 
             tier_id: selectedTierId, 
-            status: initialStatus, join_date: isFreeTier ? new Date().toISOString() : null
-          }])
-          .select().single();
+            status: initialStatus, join_date: isFreeTier ? new Date().toISOString() : null,
+            user_auth_id: userAuthId // <--- ĐIỂM MẤU CHỐT LÀ ĐÂY!
+          }]);
 
         if (indError) throw new Error('Lỗi tạo hồ sơ đại diện: ' + indError.message);
-        
-        finalIndividualId = indData.id;
         webhookRefId = corpData.id.split('-')[0]; 
       } 
-      // KỊCH BẢN 2: ĐĂNG KÝ CHO CÁ NHÂN ĐỘC LẬP
+      // KỊCH BẢN B: ĐĂNG KÝ CHO CÁ NHÂN ĐỘC LẬP
       else {
-        // 1. Tạo cá nhân luôn (GÁN TRỰC TIẾP ID LẤY TỪ GIAO DIỆN)
+        // Tạo cá nhân (NHÉT LUÔN user_auth_id VÀO ĐÂY)
         const { data: indData, error: indError } = await supabase
           .from('individuals')
           .insert([{
             full_name: formData.fullName, email: formData.email, phone: formData.phone,
             corporate_id: null, is_corporate_sponsored: false, 
             tier_id: selectedTierId, 
-            status: initialStatus, join_date: isFreeTier ? new Date().toISOString() : null
+            status: initialStatus, join_date: isFreeTier ? new Date().toISOString() : null,
+            user_auth_id: userAuthId // <--- ĐIỂM MẤU CHỐT LÀ ĐÂY!
           }])
           .select().single();
 
         if (indError) throw new Error('Lỗi tạo hồ sơ cá nhân: ' + indError.message);
-
-        finalIndividualId = indData.id;
         webhookRefId = indData.id.split('-')[0]; 
-      }
-
-      // TẠO TÀI KHOẢN SUPABASE AUTH
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            full_name: formData.fullName, phone: formData.phone,
-            individual_id: finalIndividualId, requested_tier: selectedTierData?.name
-          }
-        }
-      });
-
-      if (authError) throw new Error('Lỗi tạo tài khoản bảo mật: ' + authError.message);
-      
-      // [BỔ SUNG BƯỚC NÀY]: GẮN AUTH ID VÀO HỒ SƠ CÁ NHÂN
-      if (authData.user) {
-        const { error: updateError } = await supabase
-          .from('individuals')
-          .update({ user_auth_id: authData.user.id })
-          .eq('id', finalIndividualId);
-          
-        if (updateError) console.error("Lỗi cập nhật user_auth_id:", updateError);
       }
       
       // Tạo cú pháp chuyển khoản
