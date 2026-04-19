@@ -10,8 +10,12 @@ export default function Sidebar() {
   const router = useRouter();
   const supabase = createClient();
 
-  // STATE: Theo dõi xem Sidebar có đang mở trên Mobile không
+  // STATE GIAO DIỆN
   const [isOpen, setIsOpen] = useState(false);
+
+  // STATE PHÂN QUYỀN (RBAC)
+  const [allowedPaths, setAllowedPaths] = useState<string[]>([]);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   // Lắng nghe tín hiệu từ nút Hamburger bên Header
   useEffect(() => {
@@ -25,7 +29,44 @@ export default function Sidebar() {
     setIsOpen(false);
   }, [pathname]);
 
-  // DANH SÁCH MENU (GIỮ NGUYÊN CỦA BẠN)
+  // HÚT DỮ LIỆU PHÂN QUYỀN TỪ DATABASE
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 1. Tìm xem người này có role gì trong bảng employees
+      const { data: emp } = await supabase
+        .from('employees')
+        .select('role')
+        .eq('email', user.email) // Dùng email để đối chiếu cho chắc chắn
+        .single();
+
+      if (emp) {
+        setUserRole(emp.role);
+
+        // 2. Nếu là SUPER_ADMIN -> Cấp kim bài miễn tử (Thấy hết)
+        if (emp.role === 'SUPER_ADMIN') {
+          setAllowedPaths(['ALL']);
+        } else {
+          // 3. Nếu là role khác -> Vào bảng role_permissions lấy các path được phép
+          const { data: perms } = await supabase
+            .from('role_permissions')
+            .select('module_path')
+            .eq('role_code', emp.role)
+            .eq('can_access', true);
+
+          if (perms) {
+            setAllowedPaths(perms.map(p => p.module_path));
+          }
+        }
+      }
+    };
+
+    fetchPermissions();
+  }, []);
+
+  // DANH SÁCH MENU (GIỮ NGUYÊN)
   const menuItems = [
     { isDivider: true, title: 'Tổng quan & Chiến lược' },
     { title: 'Dashboard', path: '/', icon: 'ph-squares-four' },
@@ -36,7 +77,7 @@ export default function Sidebar() {
     { isDivider: true, title: 'Nội bộ NKBA' },
     { title: 'Quản lý Tổ chức', path: '/organization', icon: 'ph-git-branch' },
     { title: 'Quản trị Nhân sự', path: '/employees', icon: 'ph-identification-badge' },
-    { title: 'Cấu hình Phân quyền', path: '/roles', icon: 'ph-shield-check' },
+    { title: 'Cấu hình Phân quyền', path: '/roles', icon: 'ph-shield-check' }, // Thằng này giờ sẽ bị quản lý chặt!
 
     { isDivider: true, title: 'Hệ sinh thái Hội viên' },
     { title: 'Cấu hình Gói cước', path: '/settings/tiers', icon: 'ph-wallet' }, 
@@ -51,6 +92,14 @@ export default function Sidebar() {
     { title: 'Insights & Báo cáo', path: '/insights', icon: 'ph-chart-bar' },
   ];
 
+  // HÀM KIỂM TRA QUYỀN ĐỂ ẨN/HIỆN MENU
+  const canAccess = (path?: string) => {
+    if (!path) return true; // Nếu là Divider thì bỏ qua
+    if (path === '/') return true; // Trang chủ Dashboard ai cũng được vào
+    if (allowedPaths.includes('ALL')) return true; // SUPER_ADMIN
+    return allowedPaths.includes(path); // Đối chiếu với CSDL
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/login');
@@ -58,7 +107,7 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* LỚP PHỦ MÀN HÌNH MỜ (OVERLAY) - CHỈ HIỆN KHI MỞ TRÊN MOBILE */}
+      {/* OVERLAY */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[998] md:hidden transition-opacity"
@@ -66,7 +115,7 @@ export default function Sidebar() {
         ></div>
       )}
 
-      {/* KHUNG SIDEBAR CHÍNH */}
+      {/* SIDEBAR */}
       <aside className={`
         fixed inset-y-0 left-0 z-[999] w-72 md:w-64 bg-[#002D62] text-white flex flex-col h-full shadow-2xl md:shadow-xl
         transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0
@@ -76,8 +125,6 @@ export default function Sidebar() {
         {/* Logo Area */}
         <div className="h-20 flex items-center justify-between px-6 border-b border-white/10 shrink-0">
           <h1 className="text-2xl font-black tracking-widest">NKBA<span className="text-blue-400">.ADMIN</span></h1>
-          
-          {/* Nút Đóng (X) chỉ hiện trên Mobile */}
           <button 
             className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
             onClick={() => setIsOpen(false)}
@@ -90,6 +137,9 @@ export default function Sidebar() {
         <nav className="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
           
           {menuItems.map((item, index) => {
+            // [BỨC TƯỜNG LỬA TẠI ĐÂY] - Nếu không có quyền thì KHÔNG VẼ RA (return null)
+            if (item.path && !canAccess(item.path)) return null;
+
             if (item.isDivider) {
               return (
                 <div key={`div-${index}`} className="pt-4 pb-1 px-2 mt-2 first:mt-0">
