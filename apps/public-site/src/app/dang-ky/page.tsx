@@ -1,30 +1,72 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from 'supabase/client'; 
 import Link from 'next/link';
+
+// Định nghĩa khuôn (interface) cho dữ liệu Gói cước lấy từ Database
+interface TierData {
+  id: string;
+  code: string;
+  name: string;
+  annual_fee: number;
+}
 
 export default function JoinAlliancePage() {
   const BANK_ID = "MB"; 
   const ACCOUNT_NO = "123456789"; 
-  const ACCOUNT_NAME = "HIEP HOI NKBA";
+  const ACCOUNT_NAME = "NKBA ALIANCE";
 
   // LOẠI HỘI VIÊN: Doanh nghiệp hoặc Cá nhân
   const [memberType, setMemberType] = useState<'CORPORATE' | 'INDIVIDUAL'>('CORPORATE');
 
+  // STATE ĐỂ LƯU DANH SÁCH GÓI CƯỚC TỪ DATABASE
+  const [tiers, setTiers] = useState<TierData[]>([]);
+  const [isLoadingTiers, setIsLoadingTiers] = useState(true);
+
   // State quản lý form và các bước
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({ 
-    fullName: '', phone: '', email: '', password: '', // Thông tin cá nhân
-    companyName: '', taxCode: '', country: 'VN' // Thông tin doanh nghiệp (chỉ dùng nếu là CORPORATE)
+    fullName: '', phone: '', email: '', password: '', 
+    companyName: '', taxCode: '', country: 'VN' 
   });
-  const [selectedTier, setSelectedTier] = useState('Official Member (2.4tr/năm)'); 
+  
+  // State lưu trữ ID của gói cước người dùng chọn (Thay vì lưu bằng text)
+  const [selectedTierId, setSelectedTierId] = useState<string>(''); 
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // State dành cho kết quả
   const [isSuccess, setIsSuccess] = useState(false);
-  const [isFreeTier, setIsFreeTier] = useState(false);
   const [qrContent, setQrContent] = useState('');
+  
+  // Biến ảo lưu tạm thông tin gói cước đang chọn để hiển thị kết quả
+  const selectedTierData = tiers.find(t => t.id === selectedTierId);
+  const isFreeTier = selectedTierData ? Number(selectedTierData.annual_fee) === 0 : false;
+
+  // HÀM TỰ ĐỘNG GỌI DỮ LIỆU TỪ DATABASE KHI TRANG VỪA TẢI
+  useEffect(() => {
+    const fetchTiers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('individual_tiers')
+          .select('id, code, name, annual_fee')
+          .order('annual_fee', { ascending: true }); // Sắp xếp từ rẻ đến đắt
+
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          setTiers(data);
+          setSelectedTierId(data[0].id); // Mặc định chọn cái đầu tiên
+        }
+      } catch (error) {
+        console.error("Lỗi khi tải gói cước:", error);
+      } finally {
+        setIsLoadingTiers(false);
+      }
+    };
+
+    fetchTiers();
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -32,15 +74,18 @@ export default function JoinAlliancePage() {
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedTierId) {
+      alert("Hệ thống chưa tải xong gói cước, vui lòng thử lại sau giây lát.");
+      return;
+    }
+    
     setIsSubmitting(true);
 
     try {
-      const freeTierSelected = selectedTier.includes('Miễn phí');
-      setIsFreeTier(freeTierSelected);
-      const initialStatus = freeTierSelected ? 'ACTIVE' : 'PENDING_VERIFICATION'; 
+      const initialStatus = isFreeTier ? 'ACTIVE' : 'PENDING_VERIFICATION'; 
 
       let finalIndividualId = '';
-      let webhookRefId = ''; // Mã để webhook nhận diện (Dùng ID công ty hoặc ID cá nhân)
+      let webhookRefId = '';
 
       // KỊCH BẢN 1: ĐĂNG KÝ CHO DOANH NGHIỆP
       if (memberType === 'CORPORATE') {
@@ -51,55 +96,55 @@ export default function JoinAlliancePage() {
           .from('corporates')
           .insert([{
             name: formData.companyName, tax_code: formData.taxCode, 
-            status: initialStatus, join_date: freeTierSelected ? new Date().toISOString() : null
+            status: initialStatus, join_date: isFreeTier ? new Date().toISOString() : null
           }])
           .select().single();
 
         if (corpError) throw new Error('Lỗi tạo hồ sơ doanh nghiệp (Có thể trùng MST): ' + corpError.message);
 
-        // 2. Tạo đại diện
+        // 2. Tạo đại diện (GÁN TRỰC TIẾP ID LẤY TỪ GIAO DIỆN)
         const { data: indData, error: indError } = await supabase
           .from('individuals')
           .insert([{
             full_name: formData.fullName, email: formData.email, phone: formData.phone,
             corporate_id: corpData.id, is_corporate_sponsored: true, 
-            tier_id: selectedTier.includes('Cần tư vấn') || freeTierSelected ? 'ID-CỦA-GÓI-FREE-TRONG-DB' : 'ID-CỦA-GÓI-OFFICIAL-TRONG-DB', 
-            status: initialStatus, join_date: freeTierSelected ? new Date().toISOString() : null
+            tier_id: selectedTierId, 
+            status: initialStatus, join_date: isFreeTier ? new Date().toISOString() : null
           }])
           .select().single();
 
         if (indError) throw new Error('Lỗi tạo hồ sơ đại diện: ' + indError.message);
         
         finalIndividualId = indData.id;
-        webhookRefId = corpData.id.split('-')[0]; // Lấy đầu ID công ty làm mã QR
+        webhookRefId = corpData.id.split('-')[0]; 
       } 
       // KỊCH BẢN 2: ĐĂNG KÝ CHO CÁ NHÂN ĐỘC LẬP
       else {
-        // 1. Tạo cá nhân luôn, không cần pháp nhân
+        // 1. Tạo cá nhân luôn (GÁN TRỰC TIẾP ID LẤY TỪ GIAO DIỆN)
         const { data: indData, error: indError } = await supabase
           .from('individuals')
           .insert([{
             full_name: formData.fullName, email: formData.email, phone: formData.phone,
             corporate_id: null, is_corporate_sponsored: false, 
-            tier_id: selectedTier.includes('Cần tư vấn') || freeTierSelected ? 'ID-CỦA-GÓI-FREE-TRONG-DB' : 'ID-CỦA-GÓI-OFFICIAL-TRONG-DB', 
-            status: initialStatus, join_date: freeTierSelected ? new Date().toISOString() : null
+            tier_id: selectedTierId, 
+            status: initialStatus, join_date: isFreeTier ? new Date().toISOString() : null
           }])
           .select().single();
 
         if (indError) throw new Error('Lỗi tạo hồ sơ cá nhân: ' + indError.message);
 
         finalIndividualId = indData.id;
-        webhookRefId = indData.id.split('-')[0]; // Lấy đầu ID cá nhân làm mã QR
+        webhookRefId = indData.id.split('-')[0]; 
       }
 
-      // TẠO TÀI KHOẢN SUPABASE AUTH (Chung cho cả 2 loại)
+      // TẠO TÀI KHOẢN SUPABASE AUTH
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
           data: {
             full_name: formData.fullName, phone: formData.phone,
-            individual_id: finalIndividualId, requested_tier: selectedTier
+            individual_id: finalIndividualId, requested_tier: selectedTierData?.name
           }
         }
       });
@@ -107,7 +152,7 @@ export default function JoinAlliancePage() {
       if (authError) throw new Error('Lỗi tạo tài khoản bảo mật: ' + authError.message);
       
       // Tạo cú pháp chuyển khoản
-      if (!freeTierSelected && !selectedTier.includes('Cần tư vấn')) {
+      if (!isFreeTier) {
         setQrContent(`NKBA JOIN ${webhookRefId}`);
       }
 
@@ -120,6 +165,12 @@ export default function JoinAlliancePage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Hàm định dạng tiền tệ VNĐ
+  const formatVND = (amount: number) => {
+    if (amount === 0) return "Miễn phí";
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
 
   return (
@@ -159,7 +210,7 @@ export default function JoinAlliancePage() {
               
               <div className={`grid grid-cols-1 ${memberType === 'CORPORATE' ? 'md:grid-cols-2' : 'max-w-2xl mx-auto'} gap-x-12 gap-y-10`}>
                 
-                {/* THÔNG TIN CÁ NHÂN (Dùng chung cho cả 2 luồng) */}
+                {/* THÔNG TIN CÁ NHÂN (Dùng chung) */}
                 <div className={memberType === 'INDIVIDUAL' ? 'w-full' : ''}>
                   <h3 className="font-black text-2xl text-slate-900 border-b-2 border-slate-100 pb-4 mb-6 flex items-center gap-3">
                     <i className="ph-fill ph-user-circle text-[#002D62]"></i> 
@@ -173,7 +224,7 @@ export default function JoinAlliancePage() {
                   </div>
                 </div>
 
-                {/* THÔNG TIN DOANH NGHIỆP (Chỉ hiện khi chọn CORPORATE) */}
+                {/* THÔNG TIN DOANH NGHIỆP (Chỉ hiện khi CORPORATE) */}
                 {memberType === 'CORPORATE' && (
                   <div className="animate-in fade-in slide-in-from-right-4">
                     <h3 className="font-black text-2xl text-slate-900 border-b-2 border-slate-100 pb-4 mb-6 flex items-center gap-3">
@@ -193,28 +244,36 @@ export default function JoinAlliancePage() {
                 )}
               </div>
 
-              {/* CHỌN GÓI THẺ */}
+              {/* CHỌN GÓI THẺ - ĐÃ ĐƯỢC ĐỘNG HÓA */}
               <div className={`bg-slate-50 p-6 sm:p-8 rounded-2xl border border-slate-100 ${memberType === 'INDIVIDUAL' ? 'max-w-2xl mx-auto' : ''}`}>
                 <label className="text-sm font-black text-[#002D62] uppercase tracking-widest mb-3 block flex items-center gap-2"><i className="ph-fill ph-crown text-xl text-amber-500"></i> Hạng thẻ đăng ký tham gia</label>
                 <p className="text-xs text-slate-500 mb-4 font-medium italic">* Nếu chọn các gói có phí, bạn sẽ nhận được thông tin chuyển khoản ở bước tiếp theo để kích hoạt hồ sơ.</p>
-                <select 
-                  className="w-full px-5 h-14 border-2 border-blue-200 bg-white rounded-xl focus:border-[#002D62] outline-none transition font-bold text-blue-900 text-lg cursor-pointer shadow-sm"
-                  value={selectedTier}
-                  onChange={(e) => setSelectedTier(e.target.value)}
-                >
-                  <option value="Registered (Miễn phí)">Gói Khởi đầu (Miễn phí - Vào ngay)</option>
-                  <option value="Official Member (2.4tr/năm)">Official Member (2.400.000 VNĐ/năm)</option>
-                  <option value="Strategic Partner (10tr/năm)">Strategic Partner (10.000.000 VNĐ/năm)</option>
-                  <option value="Cần tư vấn thêm">Khác (Liên hệ tư vấn trực tiếp)</option>
-                </select>
+                
+                {isLoadingTiers ? (
+                  <div className="w-full px-5 h-14 border-2 border-slate-200 bg-slate-100 rounded-xl flex items-center text-slate-400 animate-pulse font-bold">
+                    Đang tải danh sách gói cước...
+                  </div>
+                ) : (
+                  <select 
+                    className="w-full px-5 h-14 border-2 border-blue-200 bg-white rounded-xl focus:border-[#002D62] outline-none transition font-bold text-blue-900 text-lg cursor-pointer shadow-sm"
+                    value={selectedTierId}
+                    onChange={(e) => setSelectedTierId(e.target.value)}
+                  >
+                    {tiers.map(tier => (
+                      <option key={tier.id} value={tier.id}>
+                        {tier.name} {tier.annual_fee > 0 ? `- ${formatVND(Number(tier.annual_fee))}/năm` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               
               <div className="flex flex-col sm:flex-row justify-center items-center gap-6 pt-6">
-                <Link href="/" className="px-8 h-12 bg-white text-slate-600 font-bold text-sm rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors">HỦY BỎ</Link>
+                <Link href="/" className="px-8 h-12 bg-white text-slate-600 font-bold text-sm rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors flex items-center justify-center">HỦY BỎ</Link>
                 <button 
                   type="submit" 
-                  disabled={isSubmitting}
-                  className={`px-12 h-14 text-white font-black rounded-xl transition-all shadow-lg flex justify-center items-center gap-2 ${isSubmitting ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#002D62] hover:bg-blue-900 shadow-blue-900/20 hover:-translate-y-0.5'}`}
+                  disabled={isSubmitting || isLoadingTiers}
+                  className={`px-12 h-14 text-white font-black rounded-xl transition-all shadow-lg flex justify-center items-center gap-2 w-full sm:w-auto ${(isSubmitting || isLoadingTiers) ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#002D62] hover:bg-blue-900 shadow-blue-900/20 hover:-translate-y-0.5'}`}
                 >
                   {isSubmitting ? <><i className="ph-bold ph-spinner animate-spin text-xl"></i> ĐANG GỬI DỮ LIỆU...</> : <><i className="ph-bold ph-paper-plane-right text-xl"></i> GỬI HỒ SƠ ĐĂNG KÝ</>}
                 </button>
@@ -223,7 +282,7 @@ export default function JoinAlliancePage() {
           </div>
         )}
 
-        {/* STEP 2: KẾT QUẢ & THÔNG TIN CHUYỂN KHOẢN (Giữ nguyên như cũ) */}
+        {/* STEP 2: KẾT QUẢ & THÔNG TIN CHUYỂN KHOẢN */}
         {step === 2 && (
           <div className="bg-white p-12 rounded-[2rem] border-4 border-emerald-200 shadow-2xl animate-in zoom-in-95 text-center max-w-3xl mx-auto">
             <div className="w-24 h-24 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner">
@@ -239,27 +298,21 @@ export default function JoinAlliancePage() {
                 <p>Bạn đã có thể sử dụng Email và Mật khẩu vừa tạo để đăng nhập vào Member Portal để bắt đầu kết nối.</p>
                 <a href="https://portal.nkba.vn/login" className="inline-flex h-12 px-8 mt-4 bg-emerald-600 text-white font-bold rounded-xl items-center gap-2 shadow-md hover:bg-emerald-700 transition-colors">VÀO PORTAL THÀNH VIÊN <i className="ph-bold ph-arrow-right"></i></a>
               </div>
-            ) : selectedTier.includes('Cần tư vấn') ? (
-               <div className="mt-10 bg-slate-50 p-6 rounded-2xl border space-y-3 font-medium text-slate-700 leading-relaxed border-slate-100">
-                <p>Vì bạn cần tư vấn thêm, Ban Thư ký NKBA sẽ liên hệ qua Số điện thoại <strong className="text-slate-900">{formData.phone}</strong> trong vòng 24h làm việc để hướng dẫn chi tiết.</p>
-                <p>Tài khoản Portal của bạn đã được tạo nhưng đang ở trạng thái <strong>Chờ kích hoạt</strong>.</p>
-                <Link href="/" className="inline-flex h-12 px-8 mt-4 bg-[#002D62] text-white font-bold rounded-xl items-center gap-2 shadow-md hover:bg-blue-900 transition-colors"><i className="ph-bold ph-arrow-left"></i> QUAY VỀ TRANG CHỦ</Link>
-               </div>
             ) : (
               <div className="mt-10 pt-10 border-t-2 border-slate-100 space-y-6 text-left">
-                <p className="font-bold text-slate-800 text-lg border-l-4 border-amber-400 pl-4">Bước tiếp theo: Kích hoạt Thẻ <strong className="text-amber-600">{selectedTier}</strong> của bạn</p>
+                <p className="font-bold text-slate-800 text-lg border-l-4 border-amber-400 pl-4">Bước tiếp theo: Kích hoạt Thẻ <strong className="text-amber-600">{selectedTierData?.name}</strong></p>
                 <p className="text-sm text-slate-500 font-medium leading-relaxed">Để hoàn tất quy trình và kích hoạt tài khoản chính thức, quý khách vui lòng thanh toán phí thường niên bằng cách chuyển khoản theo thông tin dưới đây. Hệ thống sẽ <strong className="text-blue-600">tự động duyệt</strong> ngay khi nhận được tiền.</p>
                 
                 <div className="flex flex-col md:flex-row gap-8 items-center bg-slate-50/50 p-6 rounded-2xl border border-slate-100 shadow-inner">
                   <div className="shrink-0 bg-white p-3 rounded-2xl shadow-xl border border-slate-100">
-                    <img src={`https://img.vietqr.io/image/${BANK_ID}-${ACCOUNT_NO}-compact2.jpg?amount=${selectedTier.includes('2.4tr') ? '2400000' : '10000000'}&addInfo=${qrContent}&accountName=${ACCOUNT_NAME}`} alt="VietQR" className="w-48 h-48 object-contain" />
+                    <img src={`https://img.vietqr.io/image/${BANK_ID}-${ACCOUNT_NO}-compact2.jpg?amount=${selectedTierData?.annual_fee}&addInfo=${qrContent}&accountName=${ACCOUNT_NAME}`} alt="VietQR" className="w-48 h-48 object-contain" />
                   </div>
                   <div className="flex-1 space-y-4">
                     <h3 className="text-xl font-black text-slate-900">Thông tin chuyển khoản</h3>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm bg-white p-4 rounded-xl shadow-sm border border-slate-100 font-medium">
                       <p className="text-slate-400">Ngân hàng:</p><p className="font-bold text-slate-800">MB Bank</p>
                       <p className="text-slate-400">Số tài khoản:</p><p className="font-mono font-bold text-slate-800">{ACCOUNT_NO}</p>
-                      <p className="text-slate-400">Số tiền:</p><p className="font-black text-2xl text-amber-600">{selectedTier.includes('2.4tr') ? '2.400.000đ' : '10.000.000đ'}</p>
+                      <p className="text-slate-400">Số tiền:</p><p className="font-black text-2xl text-amber-600">{formatVND(Number(selectedTierData?.annual_fee || 0))}</p>
                       <p className="text-slate-400">Nội dung (Bắt buộc):</p><p className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-1.5 rounded">{qrContent}</p>
                     </div>
                   </div>
