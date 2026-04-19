@@ -13,33 +13,34 @@ export default function TalentHubPage() {
   
   const [talents, setTalents] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
-  const [members, setMembers] = useState<any[]>([]);
+  
+  // SỬA LỖI 1: Đổi State members thành individuals
+  const [individuals, setIndividuals] = useState<any[]>([]);
   
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
   const [viewingTalent, setViewingTalent] = useState<any>(null);
 
-  // STATE MỚI: Quản lý Popup Feedback
   const [feedbackModal, setFeedbackModal] = useState<{isOpen: boolean, talentId: string | null}>({isOpen: false, talentId: null});
   const [feedbackNote, setFeedbackNote] = useState('');
 
   const fetchData = async () => {
     setIsLoading(true);
-    const [talentsRes, jobsRes, memRes] = await Promise.all([
+    const [talentsRes, jobsRes, indRes] = await Promise.all([
       supabase.from('talents').select('*').order('created_at', { ascending: false }),
       supabase.from('jobs').select('*').order('created_at', { ascending: false }),
-      supabase.from('members').select('id, company_name, tier')
+      // SỬA LỖI 2: Gọi đúng bảng individuals và lấy tên công ty từ bảng corporates
+      supabase.from('individuals').select('id, full_name, corporates(name)')
     ]);
     
     if (talentsRes.data) setTalents(talentsRes.data);
     if (jobsRes.data) setJobs(jobsRes.data);
-    if (memRes.data) setMembers(memRes.data);
+    if (indRes.data) setIndividuals(indRes.data);
     setIsLoading(false);
   };
 
   useEffect(() => { fetchData(); }, []);
 
-  // 1. Duyệt CV (Gắn Tick Xanh)
   const handleVerifyTalent = async (id: string) => {
     setIsProcessing(id);
     const { error } = await supabase.from('talents').update({ status: 'VERIFIED', admin_note: null }).eq('id', id);
@@ -48,7 +49,6 @@ export default function TalentHubPage() {
     setIsProcessing(null);
   };
 
-  // 2. Từ chối hẳn CV
   const handleRejectTalent = async (id: string) => {
     if(!confirm('Bạn có chắc chắn muốn TỪ CHỐI hồ sơ này?')) return;
     setIsProcessing(id);
@@ -58,13 +58,11 @@ export default function TalentHubPage() {
     setIsProcessing(null);
   };
 
-  // NÂNG CẤP: Nút mở Popup Feedback thay vì dùng prompt()
   const openFeedbackModal = (id: string) => {
     setFeedbackNote('');
     setFeedbackModal({ isOpen: true, talentId: id });
   };
 
-  // NÂNG CẤP: Xử lý Gửi Feedback & Bắn Notification
   const submitFeedback = async () => {
     if (!feedbackNote.trim()) return alert('Vui lòng nhập nội dung yêu cầu!');
     const targetId = feedbackModal.talentId;
@@ -72,20 +70,18 @@ export default function TalentHubPage() {
     
     setIsProcessing(targetId);
     
-    // 1. Cập nhật CV về PENDING và lưu admin_note
     const { error: updateErr } = await supabase.from('talents').update({ status: 'PENDING', admin_note: feedbackNote }).eq('id', targetId);
     
     if (updateErr) {
       alert('Lỗi cập nhật CV: ' + updateErr.message);
     } else {
-      // 2. TẠO NOTIFICATION gửi cho Member đó
       const talentToUpdate = talents.find(t => t.id === targetId);
       if (talentToUpdate?.member_id) {
         await supabase.from('notifications').insert([{
           member_id: talentToUpdate.member_id,
           title: 'Yêu cầu cập nhật Hồ sơ Chuyên gia',
           content: `Admin NKBA đã yêu cầu bạn bổ sung thông tin: "${feedbackNote}"`,
-          link_url: '/profile' // <--- Đích đến khi Member click vào chuông báo
+          link_url: '/profile'
         }]);
       }
 
@@ -97,7 +93,6 @@ export default function TalentHubPage() {
     setIsProcessing(null);
   };
 
-  // 4. (TÍNH NĂNG MỚI) Thu hồi Tick Xanh
   const handleRevokeTalent = async (id: string) => {
     if(!confirm('Thu hồi Tick Xanh sẽ khiến chuyên gia bị gỡ khỏi "Hồ cá". Bạn chắc chứ?')) return;
     setIsProcessing(id);
@@ -110,7 +105,6 @@ export default function TalentHubPage() {
     setIsProcessing(null);
   };
 
-  // Tiến cử
   const handleRecommend = async (talentId: string) => {
     if (!selectedJob) return alert('Vui lòng chọn một Job bên trái trước!');
     setIsProcessing(talentId);
@@ -122,13 +116,17 @@ export default function TalentHubPage() {
     setIsProcessing(null);
   };
 
-  const getCompanyName = (id: string) => members.find(m => m.id === id)?.company_name || 'Công ty ẩn danh';
+  // SỬA LỖI 3: Map ID để tìm tên công ty từ bảng individuals & corporates mới
+  const getCompanyName = (id: string) => {
+    const ind = individuals.find(m => m.id === id);
+    return ind?.corporates?.name || ind?.full_name || 'Công ty ẩn danh';
+  };
 
   if (isLoading) return <div className="p-20 text-center text-sm font-semibold text-slate-400 animate-pulse tracking-widest uppercase">Đang tải dữ liệu...</div>;
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto pb-20 relative h-[calc(100vh-100px)] flex flex-col">
-      {/* ... HEADER GIỮ NGUYÊN ... */}
+      
       <div className="shrink-0 bg-white p-6 md:px-8 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between md:items-center gap-6">
          <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner"><i className="ph ph-detective text-3xl"></i></div>
@@ -144,9 +142,6 @@ export default function TalentHubPage() {
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col relative">
-        {/* ========================================================= */}
-        {/* POPUP NHẬP LỜI NHẮN FEEDBACK (HIỆN LÊN TRÊN CÙNG) */}
-        {/* ========================================================= */}
         {feedbackModal.isOpen && (
           <div className="absolute inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
             <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95">
@@ -173,7 +168,7 @@ export default function TalentHubPage() {
             </div>
           </div>
         )}
-        {/* KHO CHUYÊN GIA */}
+        
         {activeTab === 'vault' && (
           <div className="flex-1 overflow-y-auto scroll-smooth pb-10">
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -202,7 +197,6 @@ export default function TalentHubPage() {
           </div>
         )}
 
-        {/* MODAL CHI TIẾT CV */}
         {viewingTalent && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in">
             <div className="bg-white w-full max-w-3xl max-h-full rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95">
@@ -213,7 +207,6 @@ export default function TalentHubPage() {
               </div>
 
               <div className="p-6 md:p-8 overflow-y-auto scroll-smooth space-y-8 flex-1">
-                {/* Lời nhắn của Admin (Nếu có) */}
                 {viewingTalent.admin_note && (
                   <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3">
                     <i className="ph ph-warning-circle text-amber-600 text-xl mt-0.5"></i>
@@ -260,13 +253,9 @@ export default function TalentHubPage() {
                 </div>
               </div>
 
-              {/* BỘ NÚT ĐIỀU KHIỂN THÔNG MINH */}
               <div className="p-6 border-t border-slate-100 bg-slate-50/80 flex flex-wrap justify-end gap-3">
-                
-                {/* Nút Đóng luôn hiện */}
                 <button onClick={() => setViewingTalent(null)} className="h-11 px-6 bg-white text-slate-600 border border-slate-200 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors">ĐÓNG</button>
                 
-                {/* Nếu ĐÃ DUYỆT -> Cho phép Thu hồi hoặc Yêu cầu sửa */}
                 {viewingTalent.status === 'VERIFIED' && (
                   <>
                     <button onClick={() => openFeedbackModal(viewingTalent.id)} disabled={isProcessing === viewingTalent.id} className="h-11 px-6 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-sm font-black hover:bg-amber-100 transition-colors">YÊU CẦU BỔ SUNG</button>
@@ -274,7 +263,6 @@ export default function TalentHubPage() {
                   </>
                 )}
 
-                {/* Nếu ĐANG CHỜ (hoặc BỊ TỪ CHỐI) -> Cho phép Duyệt, Yêu cầu sửa hoặc Từ chối hẳn */}
                 {(viewingTalent.status === 'PENDING' || viewingTalent.status === 'REJECTED') && (
                   <>
                     <button onClick={() => handleRejectTalent(viewingTalent.id)} disabled={isProcessing === viewingTalent.id} className="h-11 px-6 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl text-sm font-black hover:bg-rose-100 transition-colors">TỪ CHỐI</button>
@@ -282,14 +270,11 @@ export default function TalentHubPage() {
                     <button onClick={() => handleVerifyTalent(viewingTalent.id)} disabled={isProcessing === viewingTalent.id} className="h-11 px-8 bg-indigo-600 text-white rounded-xl text-sm font-black shadow-lg hover:bg-indigo-500 transition-colors flex items-center gap-2"><i className="ph ph-check-circle text-lg"></i> DUYỆT HỒ SƠ</button>
                   </>
                 )}
-
               </div>
             </div>
           </div>
         )}
 
-        {/* TRẠM KHỚP NỐI (Giữ nguyên) */}
-        {/* ... Tab Matching ... */}
         {activeTab === 'matching' && (
            <div className="flex-1 flex flex-col lg:flex-row gap-6 min-h-0">
              <div className="w-full lg:w-1/3 bg-white border border-slate-200 shadow-sm rounded-[2rem] flex flex-col overflow-hidden">
@@ -298,12 +283,15 @@ export default function TalentHubPage() {
                 {jobs.map(job => (
                   <div key={job.id} onClick={() => setSelectedJob(job)} className={`p-4 rounded-2xl border cursor-pointer transition-all ${selectedJob?.id === job.id ? 'bg-[#002D62] border-[#002D62] shadow-md transform scale-[1.02]' : 'bg-white border-slate-200 hover:border-blue-300 hover:bg-slate-50'}`}>
                     <h4 className={`text-sm font-bold line-clamp-1 ${selectedJob?.id === job.id ? 'text-white' : 'text-slate-800'}`}>{job.title}</h4>
+                    {/* Dùng hàm getCompanyName mới bọc tên */}
+                    <p className={`text-[10px] mt-1 font-semibold opacity-80 ${selectedJob?.id === job.id ? 'text-blue-100' : 'text-slate-500'}`}>{getCompanyName(job.member_id)}</p>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="w-full lg:w-2/3 bg-white border border-slate-200 shadow-sm rounded-[2rem] flex flex-col relative overflow-hidden">
-              {/* Nội dung Matching */}
+            <div className="w-full lg:w-2/3 bg-white border border-slate-200 shadow-sm rounded-[2rem] flex flex-col relative overflow-hidden p-6 text-center justify-center text-slate-400">
+              <i className="ph ph-arrows-merge text-5xl mb-4"></i>
+              <p>Chọn một Job bên trái để bắt đầu tiến cử Chuyên gia (Matching).</p>
             </div>
            </div>
         )}
