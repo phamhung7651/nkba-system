@@ -4,7 +4,28 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "NKBA Digital Sales Kit - Hồ Sơ Năng Lực",
-  description: "Liên minh Kinh doanh Xây dựng Việt - Nhật",
+  description: "Liên minh Kinh doanh Xây dựng Việt - Nhật. Nền tảng kết nối giao thương chuyên nghiệp.",
+  metadataBase: new URL('https://nkba.vn'), // Thay bằng tên miền public của bạn nếu cần
+  openGraph: {
+    title: "NKBA Digital Sales Kit - Hồ Sơ Năng Lực",
+    description: "Liên minh Kinh doanh Xây dựng Việt - Nhật",
+    url: 'https://nkba.vn',
+    siteName: 'NKBA Alliance',
+    images: [
+      {
+        url: '/og-image.png', // Đảm bảo bạn có file này trong thư mục public
+        width: 1200,
+        height: 630,
+        alt: 'NKBA Alliance',
+      },
+    ],
+    locale: 'vi_VN',
+    type: 'website',
+  },
+  icons: {
+    icon: '/icon.png', // Đảm bảo bạn có file icon.png trong thư mục public
+    apple: '/icon.png',
+  },
 };
 
 export default function RootLayout({
@@ -37,10 +58,10 @@ export default function RootLayout({
         <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-md border-b border-slate-200/60 shadow-sm transition-all">
           <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
             
-            {/* 1. BRAND LOGO - Đã cập nhật ảnh SVG */}
+            {/* 1. BRAND LOGO - Thay bằng file PNG */}
             <Link href="/" className="flex items-center group">
               <img 
-                src="/logo_ngang_vi.svg" 
+                src="/logo_ngang_vi.png" 
                 alt="NKBA Logo" 
                 className="h-10 md:h-12 w-auto object-contain transition-transform group-hover:scale-105" 
               />
@@ -111,7 +132,10 @@ export default function RootLayout({
                 <h4 className="text-white font-bold mb-6 uppercase tracking-wider text-sm">Portal</h4>
                 <ul className="space-y-4 text-sm font-medium">
                   <li><a href="https://portal.nkba.vn/login" className="hover:text-blue-400 transition-colors">Đăng nhập thành viên</a></li>
+                  
+                  {/* ĐÃ SỬA: Đổi lại thành /dang-ky */}
                   <li><Link href="/dang-ky" className="hover:text-blue-400 transition-colors">Đăng ký hội viên mới</Link></li>
+                  
                   <li><Link href="/huong-dan" className="hover:text-blue-400 transition-colors">Hướng dẫn sử dụng</Link></li>
                 </ul>
               </div>
