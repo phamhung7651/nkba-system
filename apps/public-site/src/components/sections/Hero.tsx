@@ -38,9 +38,7 @@ export default function Hero({ openRegisterModal }: HeroProps) {
               Tham gia Miễn phí
             </button>
             
-            <Link href="/upgrade" className="px-8 py-4 bg-gradient-to-r from-[#D4AF37] to-yellow-600 text-white font-bold rounded-lg hover:to-yellow-500 transition-all flex items-center justify-center gap-2 shadow-xl shadow-yellow-900/30">
-              Nâng cấp Đặc quyền
-            </Link>
+            
 
             <button onClick={handlePrint} className="px-6 py-4 bg-white/5 border border-white/20 text-white font-bold rounded-lg hover:bg-white hover:text-slate-900 transition-all flex items-center justify-center gap-2 backdrop-blur-sm">
               <i className="ph-bold ph-download-simple"></i> PDF
