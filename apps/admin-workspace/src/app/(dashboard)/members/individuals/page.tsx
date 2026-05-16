@@ -19,9 +19,7 @@ export default function IndividualsPage() {
   const [isCorporateSponsored, setIsCorporateSponsored] = useState(false);
   const [formData, setFormData] = useState({ full_name: '', email: '', phone: '', corporate_id: '', tier_id: '', expiration_date: '' });
 
-  // ==========================================
-  // STATE MỚI: MODAL PHÊ DUYỆT (SOP 3 LỚP)
-  // ==========================================
+  // Modal Phê duyệt
   const [reviewingInd, setReviewingInd] = useState<any>(null);
   const [reviewMode, setReviewMode] = useState<'VERIFY' | 'APPROVE' | null>(null);
   const [expiryDate, setExpiryDate] = useState('');
@@ -30,35 +28,35 @@ export default function IndividualsPage() {
 
   const fetchData = async () => {
     setLoading(true);
-    // 1. Lấy thông tin User & Role
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: emp } = await supabase.from('employees').select('id, name, role').eq('email', user.email).single();
       setCurrentUser(emp);
     }
 
-    // 2. Fetch Data
+    // TỐI GIẢN HÓA TRUY VẤN: Lấy tất cả (*), bỏ qua các liên kết dễ gây lỗi sập dữ liệu
     const [indRes, corpRes, tierRes] = await Promise.all([
       supabase.from('individuals')
-        // ĐÃ FIX: Chỉ gọi các cột chắc chắn có trong DB để tránh sập truy vấn
         .select(`
-          id, full_name, email, phone, status, corporate_id, tier_id, expiration_date, join_date, rejection_reason, verified_at,
+          *,
           corporates(name, expiration_date), 
-          individual_tiers!individuals_tier_id_fkey(name, code), 
-          verifier:verified_by(name), 
-          approver:approved_by(name)
+          individual_tiers(name, code)
         `)
         .order('created_at', { ascending: false }),
       supabase.from('corporates').select('*, corporate_tiers(quota_silver, quota_gold, quota_titanium)').eq('status', 'ACTIVE'),
       supabase.from('individual_tiers').select('*')
     ]);
     
+    // Nếu có lỗi truy vấn, bật thông báo lên để debug ngay
+    if (indRes.error) {
+      console.error("Supabase Error:", indRes.error);
+      alert("⚠️ Lỗi truy vấn Database: " + indRes.error.message);
+    }
+
     if (indRes.data) setIndividuals(indRes.data);
     if (corpRes.data) setCorporates(corpRes.data);
     if (tierRes.data) setIndTiers(tierRes.data);
     
-    if (indRes.error) console.error("Lỗi lấy danh sách cá nhân:", indRes.error);
-
     setLoading(false);
   };
 
@@ -66,14 +64,15 @@ export default function IndividualsPage() {
 
   const isCEO = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'CEO';
 
-  // Lọc Data
+  // ==========================================
+  // ĐÃ FIX: LƯỚI LỌC BẮT GỌN CẢ NHỮNG NGƯỜI BỊ NULL STATUS
+  // ==========================================
   const activeInds = individuals.filter(i => i.status === 'ACTIVE');
-  const verifyInds = individuals.filter(i => ['PENDING_VERIFICATION', 'REJECTED'].includes(i.status));
   const approveInds = individuals.filter(i => ['PENDING_APPROVAL', 'PENDING_DELETION'].includes(i.status));
+  // Gom tất cả những người không có status (hoặc null) vào Trạm Xác minh để NV xử lý lại
+  const verifyInds = individuals.filter(i => !i.status || ['PENDING_VERIFICATION', 'REJECTED'].includes(i.status));
 
-  // ==========================================
-  // 1. ĐĂNG KÝ / SỬA (Mặc định vào PENDING_VERIFICATION)
-  // ==========================================
+
   const handleSaveInd = async () => {
     if (!formData.full_name || !formData.tier_id) return alert('Vui lòng nhập Tên và chọn Gói thẻ!');
     if (isCorporateSponsored && !formData.corporate_id) return alert('Vui lòng chọn Pháp nhân bảo lãnh!');
@@ -85,7 +84,7 @@ export default function IndividualsPage() {
       tier_id: formData.tier_id,
       corporate_id: isCorporateSponsored ? formData.corporate_id : null,
       expiration_date: formData.expiration_date || null,
-      ...(editingId ? {} : { status: 'PENDING_VERIFICATION' }) // Ép cứng trạng thái cấp mới
+      ...(editingId ? {} : { status: 'PENDING_VERIFICATION' }) 
     };
 
     if (editingId) {
@@ -113,9 +112,6 @@ export default function IndividualsPage() {
     fetchData();
   };
 
-  // ==========================================
-  // XỬ LÝ MODAL PHÊ DUYỆT CHI TIẾT
-  // ==========================================
   const openReviewModal = (ind: any, mode: 'VERIFY' | 'APPROVE') => {
     setReviewingInd(ind);
     setReviewMode(mode);
@@ -123,15 +119,13 @@ export default function IndividualsPage() {
     setRejectReason(ind.rejection_reason || '');
     
     if (mode === 'VERIFY') {
-      if (ind.corporate_id) { // Kiểm tra thông qua corporate_id
-        // Đã có Quota pháp nhân: Kế thừa ngày hết hạn của pháp nhân
+      if (ind.corporate_id) { 
         const sponsorCorp = corporates.find(c => c.id === ind.corporate_id);
         setExpiryDate(sponsorCorp?.expiration_date ? sponsorCorp.expiration_date.split('T')[0] : '');
       } else {
-        // Độc lập: Tự động +1 năm
         const nextYear = new Date();
         nextYear.setFullYear(nextYear.getFullYear() + 1);
-        setExpiryDate(ind.expiration_date || nextYear.toISOString().split('T')[0]);
+        setExpiryDate(ind.expiration_date ? ind.expiration_date.split('T')[0] : nextYear.toISOString().split('T')[0]);
       }
     }
   };
@@ -156,8 +150,7 @@ export default function IndividualsPage() {
       } 
       
       else if (action === 'SUBMIT_TO_CEO') {
-        // --- LOGIC CHECK QUOTA ---
-        if (reviewingInd.corporate_id) { // Kiểm tra bằng corporate_id
+        if (reviewingInd.corporate_id) { 
           const selectedCorp = corporates.find(c => c.id === reviewingInd.corporate_id);
           const selectedTier = indTiers.find(t => t.id === reviewingInd.tier_id);
           if (!selectedCorp || !selectedTier) throw new Error('Không tìm thấy Công ty hoặc Gói thẻ!');
@@ -165,10 +158,9 @@ export default function IndividualsPage() {
           const tierCode = selectedTier.code.toLowerCase(); 
           const maxQuota = selectedCorp.corporate_tiers?.[`quota_${tierCode}`] || 0;
 
-          // Đếm quota đã dùng + đang chờ duyệt
           const { count } = await supabase.from('individuals')
             .select('*', { count: 'exact', head: true })
-            .not('corporate_id', 'is', null) // Phải có công ty
+            .not('corporate_id', 'is', null) 
             .eq('corporate_id', reviewingInd.corporate_id)
             .eq('tier_id', reviewingInd.tier_id)
             .in('status', ['ACTIVE', 'PENDING_APPROVAL']);
@@ -270,7 +262,6 @@ export default function IndividualsPage() {
             
             <div className="xl:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase">Gói Thẻ (*)</label><select value={formData.tier_id} onChange={e => setFormData({...formData, tier_id: e.target.value})} className="w-full h-11 border border-slate-200 bg-white rounded-xl px-2 mt-1 outline-none focus:border-blue-400"><option value="">-- Chọn --</option>{indTiers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
 
-            {/* NẾU LÀ ĐỘC LẬP: CHUẨN BỊ Ô GIA HẠN NGÀY */}
             {!isCorporateSponsored && (
               <div className="xl:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase">Ngày hết hạn (Gia hạn)</label><input type="date" value={formData.expiration_date} onChange={e => setFormData({...formData, expiration_date: e.target.value})} className="w-full h-11 border border-slate-200 bg-white text-slate-700 font-bold rounded-xl px-3 mt-1 outline-none focus:border-blue-400" /></div>
             )}
@@ -292,24 +283,23 @@ export default function IndividualsPage() {
             </thead>
             <tbody>
               {(activeTab === 'list' ? activeInds : activeTab === 'verify' ? verifyInds : approveInds).map(ind => {
-                 // Trích xuất mã Tier do query sử dụng !individuals_tier_id_fkey
                  const tierName = Array.isArray(ind.individual_tiers) ? ind.individual_tiers[0]?.name : ind.individual_tiers?.name;
 
                  return (
                   <tr key={ind.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
                     <td className="p-4 pl-6">
-                      <div className="font-bold text-slate-900 text-base">{ind.full_name} <span className="text-amber-600 ml-1">({tierName || 'N/A'})</span></div>
+                      <div className="font-bold text-slate-900 text-base">{ind.full_name} <span className="text-amber-600 ml-1">({tierName || 'Chưa chọn gói'})</span></div>
                       <div className="text-xs text-slate-500 mt-1"><i className="ph-fill ph-envelope-simple mr-1"></i>{ind.email || ind.phone || 'Chưa cung cấp'}</div>
                       {ind.status === 'REJECTED' && <div className="text-xs text-rose-700 font-medium mt-2 bg-rose-50 p-2.5 rounded-lg border border-rose-100"><i className="ph-fill ph-warning-circle text-rose-500"></i> Bút phê: "{ind.rejection_reason}"</div>}
                     </td>
                     <td className="p-4">
-                      {ind.corporate_id ? ( // Kiểm tra bằng corporate_id thay vì is_corporate_sponsored
+                      {ind.corporate_id ? ( 
                         <div><span className="text-[9px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded uppercase">Pháp nhân</span><div className="font-bold text-slate-700 text-xs mt-1">{ind.corporates?.name}</div></div>
                       ) : <span className="text-[9px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase">Độc lập</span>}
                     </td>
                     <td className="p-4">
-                      <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${ind.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : ind.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : ind.status === 'PENDING_DELETION' ? 'bg-slate-800 text-white' : 'bg-amber-100 text-amber-700'}`}>
-                        {ind.status.replace('_', ' ')}
+                      <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${ind.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : ind.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : ind.status === 'PENDING_DELETION' ? 'bg-slate-800 text-white' : !ind.status ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>
+                        {!ind.status ? 'CHƯA CẬP NHẬT' : ind.status.replace('_', ' ')}
                       </span>
                     </td>
                     <td className="p-4 text-right space-x-2 pr-6">
@@ -349,49 +339,45 @@ export default function IndividualsPage() {
             </div>
 
             <div className="p-6 md:p-8 overflow-y-auto space-y-6">
-              {/* Thông tin cốt lõi */}
               <div className="grid grid-cols-2 gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
                 <div className="col-span-2"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Họ và Tên</p><p className="font-black text-slate-800 text-lg">{reviewingInd.full_name}</p></div>
                 <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Liên hệ</p><p className="font-medium text-slate-700">{reviewingInd.email || reviewingInd.phone || 'N/A'}</p></div>
                 
-                {/* Lấy tên gói thẻ chuẩn */}
                 <div>
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Gói cấp phát</p>
                    <p className="font-bold text-amber-600">
-                     {Array.isArray(reviewingInd.individual_tiers) ? reviewingInd.individual_tiers[0]?.name : reviewingInd.individual_tiers?.name}
+                     {Array.isArray(reviewingInd.individual_tiers) ? reviewingInd.individual_tiers[0]?.name : reviewingInd.individual_tiers?.name || 'CHƯA CHỌN GÓI'}
                    </p>
                 </div>
                 
                 <div className="col-span-2">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nguồn cấp (Bảo lãnh)</p>
-                  {reviewingInd.corporate_id ? ( // Kiểm tra bằng corporate_id
+                  {reviewingInd.corporate_id ? ( 
                     <p className="font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 w-fit"><i className="ph-fill ph-buildings"></i> {reviewingInd.corporates?.name}</p>
                   ) : <p className="font-bold text-slate-600"><i className="ph-fill ph-user"></i> Cấp thẻ Độc lập</p>}
                 </div>
               </div>
 
-              {/* Dành riêng cho TGĐ xem */}
               {reviewMode === 'APPROVE' && (
                 <div className="bg-blue-50/50 border border-blue-100 p-5 rounded-2xl flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black"><i className="ph-fill ph-user-check text-xl"></i></div>
                     <div>
-                      <p className="text-xs font-bold text-blue-900">NV Xác minh: {reviewingInd.verifier?.name}</p>
-                      <p className="text-[10px] font-medium text-blue-600 mt-0.5">Vào lúc: {new Date(reviewingInd.verified_at).toLocaleString('vi-VN')}</p>
+                      <p className="text-xs font-bold text-blue-900">NV Xác minh: Hệ thống / {reviewingInd.verified_by || 'N/A'}</p>
+                      <p className="text-[10px] font-medium text-blue-600 mt-0.5">Vào lúc: {reviewingInd.verified_at ? new Date(reviewingInd.verified_at).toLocaleString('vi-VN') : 'N/A'}</p>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Thời hạn cấp</p>
-                    <p className="font-black text-slate-800 text-lg bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-sm">{new Date(reviewingInd.expiration_date).toLocaleDateString('vi-VN')}</p>
+                    <p className="font-black text-slate-800 text-lg bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-sm">{reviewingInd.expiration_date ? new Date(reviewingInd.expiration_date).toLocaleDateString('vi-VN') : 'N/A'}</p>
                   </div>
                 </div>
               )}
 
-              {/* Dành cho NV: Thiết lập hạn mức */}
               {reviewMode === 'VERIFY' && !isRejecting && (
                 <div className="bg-amber-50/50 p-5 rounded-2xl border border-amber-100">
                   <label className="text-xs font-bold text-slate-800 block mb-2 uppercase tracking-widest flex items-center gap-2"><i className="ph-fill ph-calendar-blank text-amber-500 text-lg"></i> Đề xuất Ngày hết hạn thẻ</label>
-                  {reviewingInd.corporate_id ? ( // Kiểm tra bằng corporate_id
+                  {reviewingInd.corporate_id ? ( 
                     <>
                       <p className="text-[10px] text-slate-500 mb-3 font-medium">Thẻ được cấp theo Quota của Doanh nghiệp. Hệ thống đã <strong className="text-blue-600">tự động đồng bộ</strong> ngày hết hạn theo Hợp đồng của Pháp nhân.</p>
                       <input type="date" value={expiryDate} readOnly className="w-full h-12 border-2 border-slate-200 rounded-xl px-4 font-bold text-slate-500 outline-none bg-slate-100 cursor-not-allowed" />
@@ -405,7 +391,6 @@ export default function IndividualsPage() {
                 </div>
               )}
 
-              {/* Khung gõ Comment từ chối */}
               {isRejecting && (
                 <div className="animate-in fade-in slide-in-from-top-4 duration-300">
                   <label className="text-xs font-black text-rose-600 uppercase tracking-widest mb-2 flex items-center gap-2"><i className="ph-fill ph-warning-circle text-lg"></i> Ghi chú lý do trả hồ sơ (Bút phê)</label>
@@ -414,7 +399,6 @@ export default function IndividualsPage() {
               )}
             </div>
 
-            {/* Vùng Nút Bấm */}
             <div className="p-5 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row justify-end gap-3">
               {isRejecting ? (
                 <>
