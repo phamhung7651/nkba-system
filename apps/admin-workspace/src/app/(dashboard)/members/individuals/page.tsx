@@ -40,9 +40,15 @@ export default function IndividualsPage() {
     // 2. Fetch Data
     const [indRes, corpRes, tierRes] = await Promise.all([
       supabase.from('individuals')
-        .select('*, corporates(name, expiration_date), individual_tiers(name, code), verifier:verified_by(name), approver:approved_by(name)')
-        .order('join_date', { ascending: false }),
-      // Chỉ lấy các Pháp nhân đang ACTIVE để cấp Quota
+        // ĐÃ FIX: Chỉ gọi các cột chắc chắn có trong DB để tránh sập truy vấn
+        .select(`
+          id, full_name, email, phone, status, corporate_id, tier_id, expiration_date, join_date, rejection_reason, verified_at,
+          corporates(name, expiration_date), 
+          individual_tiers!individuals_tier_id_fkey(name, code), 
+          verifier:verified_by(name), 
+          approver:approved_by(name)
+        `)
+        .order('created_at', { ascending: false }),
       supabase.from('corporates').select('*, corporate_tiers(quota_silver, quota_gold, quota_titanium)').eq('status', 'ACTIVE'),
       supabase.from('individual_tiers').select('*')
     ]);
@@ -50,10 +56,13 @@ export default function IndividualsPage() {
     if (indRes.data) setIndividuals(indRes.data);
     if (corpRes.data) setCorporates(corpRes.data);
     if (tierRes.data) setIndTiers(tierRes.data);
+    
+    if (indRes.error) console.error("Lỗi lấy danh sách cá nhân:", indRes.error);
+
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [supabase]);
 
   const isCEO = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'CEO';
 
@@ -75,7 +84,6 @@ export default function IndividualsPage() {
       phone: formData.phone || null,
       tier_id: formData.tier_id,
       corporate_id: isCorporateSponsored ? formData.corporate_id : null,
-      is_corporate_sponsored: isCorporateSponsored,
       expiration_date: formData.expiration_date || null,
       ...(editingId ? {} : { status: 'PENDING_VERIFICATION' }) // Ép cứng trạng thái cấp mới
     };
@@ -115,7 +123,7 @@ export default function IndividualsPage() {
     setRejectReason(ind.rejection_reason || '');
     
     if (mode === 'VERIFY') {
-      if (ind.is_corporate_sponsored && ind.corporate_id) {
+      if (ind.corporate_id) { // Kiểm tra thông qua corporate_id
         // Đã có Quota pháp nhân: Kế thừa ngày hết hạn của pháp nhân
         const sponsorCorp = corporates.find(c => c.id === ind.corporate_id);
         setExpiryDate(sponsorCorp?.expiration_date ? sponsorCorp.expiration_date.split('T')[0] : '');
@@ -148,8 +156,8 @@ export default function IndividualsPage() {
       } 
       
       else if (action === 'SUBMIT_TO_CEO') {
-        // --- LOGIC CHECK QUOTA ĐƯỢC CHUYỂN VÀO ĐÂY ---
-        if (reviewingInd.is_corporate_sponsored && reviewingInd.corporate_id) {
+        // --- LOGIC CHECK QUOTA ---
+        if (reviewingInd.corporate_id) { // Kiểm tra bằng corporate_id
           const selectedCorp = corporates.find(c => c.id === reviewingInd.corporate_id);
           const selectedTier = indTiers.find(t => t.id === reviewingInd.tier_id);
           if (!selectedCorp || !selectedTier) throw new Error('Không tìm thấy Công ty hoặc Gói thẻ!');
@@ -160,9 +168,9 @@ export default function IndividualsPage() {
           // Đếm quota đã dùng + đang chờ duyệt
           const { count } = await supabase.from('individuals')
             .select('*', { count: 'exact', head: true })
+            .not('corporate_id', 'is', null) // Phải có công ty
             .eq('corporate_id', reviewingInd.corporate_id)
             .eq('tier_id', reviewingInd.tier_id)
-            .eq('is_corporate_sponsored', true)
             .in('status', ['ACTIVE', 'PENDING_APPROVAL']);
 
           if ((count || 0) >= maxQuota) {
@@ -283,35 +291,40 @@ export default function IndividualsPage() {
               <tr><th className="p-4 pl-6">Hội viên</th><th className="p-4">Phân loại</th><th className="p-4">Trạng thái</th><th className="p-4 text-right pr-6">Thao tác</th></tr>
             </thead>
             <tbody>
-              {(activeTab === 'list' ? activeInds : activeTab === 'verify' ? verifyInds : approveInds).map(ind => (
-                <tr key={ind.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-                  <td className="p-4 pl-6">
-                    <div className="font-bold text-slate-900 text-base">{ind.full_name} <span className="text-amber-600 ml-1">({ind.individual_tiers?.name})</span></div>
-                    <div className="text-xs text-slate-500 mt-1"><i className="ph-fill ph-envelope-simple mr-1"></i>{ind.email || ind.phone || 'Chưa cung cấp'}</div>
-                    {ind.status === 'REJECTED' && <div className="text-xs text-rose-700 font-medium mt-2 bg-rose-50 p-2.5 rounded-lg border border-rose-100"><i className="ph-fill ph-warning-circle text-rose-500"></i> Bút phê: "{ind.rejection_reason}"</div>}
-                  </td>
-                  <td className="p-4">
-                    {ind.is_corporate_sponsored ? (
-                      <div><span className="text-[9px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded uppercase">Pháp nhân</span><div className="font-bold text-slate-700 text-xs mt-1">{ind.corporates?.name}</div></div>
-                    ) : <span className="text-[9px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase">Độc lập</span>}
-                  </td>
-                  <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${ind.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : ind.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : ind.status === 'PENDING_DELETION' ? 'bg-slate-800 text-white' : 'bg-amber-100 text-amber-700'}`}>
-                      {ind.status.replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right space-x-2 pr-6">
-                    {activeTab === 'list' && (
-                      <>
-                        <button onClick={() => {setEditingId(ind.id); setIsCorporateSponsored(ind.is_corporate_sponsored); setFormData({full_name: ind.full_name, email: ind.email || '', phone: ind.phone || '', corporate_id: ind.corporate_id || '', tier_id: ind.tier_id, expiration_date: ind.expiration_date ? ind.expiration_date.split('T')[0] : ''}); setShowForm(true);}} className="px-3 py-1.5 bg-slate-100 text-blue-600 font-bold text-xs rounded-lg hover:bg-blue-50 transition-colors">Sửa</button>
-                        <button onClick={() => handleRequestDelete(ind)} className="px-3 py-1.5 bg-slate-100 text-rose-600 font-bold text-xs rounded-lg hover:bg-rose-50 transition-colors">Xin Xóa</button>
-                      </>
-                    )}
-                    {activeTab === 'verify' && <button onClick={() => openReviewModal(ind, 'VERIFY')} className="px-4 py-2 bg-amber-500 text-white font-bold text-xs rounded-lg hover:bg-amber-600 shadow-sm transition-transform hover:-translate-y-0.5">XEM & XÁC MINH</button>}
-                    {activeTab === 'approve' && <button onClick={() => openReviewModal(ind, 'APPROVE')} className="px-4 py-2 bg-rose-600 text-white font-bold text-xs rounded-lg hover:bg-rose-700 shadow-sm transition-transform hover:-translate-y-0.5">XEM & KÝ DUYỆT</button>}
-                  </td>
-                </tr>
-              ))}
+              {(activeTab === 'list' ? activeInds : activeTab === 'verify' ? verifyInds : approveInds).map(ind => {
+                 // Trích xuất mã Tier do query sử dụng !individuals_tier_id_fkey
+                 const tierName = Array.isArray(ind.individual_tiers) ? ind.individual_tiers[0]?.name : ind.individual_tiers?.name;
+
+                 return (
+                  <tr key={ind.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                    <td className="p-4 pl-6">
+                      <div className="font-bold text-slate-900 text-base">{ind.full_name} <span className="text-amber-600 ml-1">({tierName || 'N/A'})</span></div>
+                      <div className="text-xs text-slate-500 mt-1"><i className="ph-fill ph-envelope-simple mr-1"></i>{ind.email || ind.phone || 'Chưa cung cấp'}</div>
+                      {ind.status === 'REJECTED' && <div className="text-xs text-rose-700 font-medium mt-2 bg-rose-50 p-2.5 rounded-lg border border-rose-100"><i className="ph-fill ph-warning-circle text-rose-500"></i> Bút phê: "{ind.rejection_reason}"</div>}
+                    </td>
+                    <td className="p-4">
+                      {ind.corporate_id ? ( // Kiểm tra bằng corporate_id thay vì is_corporate_sponsored
+                        <div><span className="text-[9px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded uppercase">Pháp nhân</span><div className="font-bold text-slate-700 text-xs mt-1">{ind.corporates?.name}</div></div>
+                      ) : <span className="text-[9px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase">Độc lập</span>}
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${ind.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : ind.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : ind.status === 'PENDING_DELETION' ? 'bg-slate-800 text-white' : 'bg-amber-100 text-amber-700'}`}>
+                        {ind.status.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right space-x-2 pr-6">
+                      {activeTab === 'list' && (
+                        <>
+                          <button onClick={() => {setEditingId(ind.id); setIsCorporateSponsored(!!ind.corporate_id); setFormData({full_name: ind.full_name, email: ind.email || '', phone: ind.phone || '', corporate_id: ind.corporate_id || '', tier_id: ind.tier_id, expiration_date: ind.expiration_date ? ind.expiration_date.split('T')[0] : ''}); setShowForm(true);}} className="px-3 py-1.5 bg-slate-100 text-blue-600 font-bold text-xs rounded-lg hover:bg-blue-50 transition-colors">Sửa</button>
+                          <button onClick={() => handleRequestDelete(ind)} className="px-3 py-1.5 bg-slate-100 text-rose-600 font-bold text-xs rounded-lg hover:bg-rose-50 transition-colors">Xin Xóa</button>
+                        </>
+                      )}
+                      {activeTab === 'verify' && <button onClick={() => openReviewModal(ind, 'VERIFY')} className="px-4 py-2 bg-amber-500 text-white font-bold text-xs rounded-lg hover:bg-amber-600 shadow-sm transition-transform hover:-translate-y-0.5">XEM & XÁC MINH</button>}
+                      {activeTab === 'approve' && <button onClick={() => openReviewModal(ind, 'APPROVE')} className="px-4 py-2 bg-rose-600 text-white font-bold text-xs rounded-lg hover:bg-rose-700 shadow-sm transition-transform hover:-translate-y-0.5">XEM & KÝ DUYỆT</button>}
+                    </td>
+                  </tr>
+                );
+              })}
               {(activeTab === 'list' ? activeInds : activeTab === 'verify' ? verifyInds : approveInds).length === 0 && (
                 <tr><td colSpan={4} className="p-10 text-center text-slate-400 font-medium">Không có dữ liệu trong danh sách này.</td></tr>
               )}
@@ -340,10 +353,18 @@ export default function IndividualsPage() {
               <div className="grid grid-cols-2 gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
                 <div className="col-span-2"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Họ và Tên</p><p className="font-black text-slate-800 text-lg">{reviewingInd.full_name}</p></div>
                 <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Liên hệ</p><p className="font-medium text-slate-700">{reviewingInd.email || reviewingInd.phone || 'N/A'}</p></div>
-                <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Gói cấp phát</p><p className="font-bold text-amber-600">{reviewingInd.individual_tiers?.name}</p></div>
+                
+                {/* Lấy tên gói thẻ chuẩn */}
+                <div>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Gói cấp phát</p>
+                   <p className="font-bold text-amber-600">
+                     {Array.isArray(reviewingInd.individual_tiers) ? reviewingInd.individual_tiers[0]?.name : reviewingInd.individual_tiers?.name}
+                   </p>
+                </div>
+                
                 <div className="col-span-2">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nguồn cấp (Bảo lãnh)</p>
-                  {reviewingInd.is_corporate_sponsored ? (
+                  {reviewingInd.corporate_id ? ( // Kiểm tra bằng corporate_id
                     <p className="font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 w-fit"><i className="ph-fill ph-buildings"></i> {reviewingInd.corporates?.name}</p>
                   ) : <p className="font-bold text-slate-600"><i className="ph-fill ph-user"></i> Cấp thẻ Độc lập</p>}
                 </div>
@@ -370,7 +391,7 @@ export default function IndividualsPage() {
               {reviewMode === 'VERIFY' && !isRejecting && (
                 <div className="bg-amber-50/50 p-5 rounded-2xl border border-amber-100">
                   <label className="text-xs font-bold text-slate-800 block mb-2 uppercase tracking-widest flex items-center gap-2"><i className="ph-fill ph-calendar-blank text-amber-500 text-lg"></i> Đề xuất Ngày hết hạn thẻ</label>
-                  {reviewingInd.is_corporate_sponsored ? (
+                  {reviewingInd.corporate_id ? ( // Kiểm tra bằng corporate_id
                     <>
                       <p className="text-[10px] text-slate-500 mb-3 font-medium">Thẻ được cấp theo Quota của Doanh nghiệp. Hệ thống đã <strong className="text-blue-600">tự động đồng bộ</strong> ngày hết hạn theo Hợp đồng của Pháp nhân.</p>
                       <input type="date" value={expiryDate} readOnly className="w-full h-12 border-2 border-slate-200 rounded-xl px-4 font-bold text-slate-500 outline-none bg-slate-100 cursor-not-allowed" />
